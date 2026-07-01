@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Emblem } from './FactionBadge'
 import { scenarioTheme } from '../theme/scenarios'
 
@@ -19,7 +20,16 @@ interface Props {
  * so it's self-contained and themes itself from `scenarioId`.
  */
 export function ScenarioBanner({ scenarioId, scenarioName, subtitle, right, className }: Props) {
+  const { t } = useTranslation()
   const theme = scenarioTheme(scenarioId)
+  // Flavor text (era + atmosphere) follows the UI language; fall back to the
+  // theme's own values for any scenario without translations.
+  const era = scenarioId
+    ? t(`scenarioFlavor.${scenarioId}.era`, { defaultValue: theme.era })
+    : theme.era
+  const atmosphere = scenarioId
+    ? t(`scenarioFlavor.${scenarioId}.atmosphere`, { defaultValue: theme.atmosphere })
+    : theme.atmosphere
   const style = {
     '--accent': theme.accent,
     '--accent-secondary': theme.accentSecondary,
@@ -46,8 +56,8 @@ export function ScenarioBanner({ scenarioId, scenarioName, subtitle, right, clas
 
         <div className="min-w-0 flex-1">
           <div className="label" style={{ color: theme.accent }}>
-            {theme.era ? `${theme.era} · ` : ''}
-            {theme.atmosphere}
+            {era ? `${era} · ` : ''}
+            {atmosphere}
           </div>
           <h1 className="truncate" style={{ color: theme.accent }}>
             {scenarioName}

@@ -1,4 +1,9 @@
 {
+  "scenarioFlavor": {
+    "corinth_338": { "atmosphere": "Antigüedad, mármol, poder", "era": "338 a.C." },
+    "oil_crisis_1973": { "atmosphere": "Años 70, urgencia industrial", "era": "1973" },
+    "arctic_2031": { "atmosphere": "Frío, tecnológico, silencio", "era": "2031" }
+  },
   "common": {
     "appName": "Crisis Protocol",
     "loading": "Cargando…",

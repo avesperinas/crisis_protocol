@@ -1,3 +1,4 @@
+import i18n from '../i18n'
 import { useAuthStore } from '../store/authStore'
 import type { AuthUser, TokenResponse } from '../types/auth'
 import type {
@@ -104,8 +105,14 @@ export const authApi = {
   me: () => request<AuthUser>('/api/auth/me'),
 }
 
+// The game's language and the lobby scenario preview both follow the current
+// UI language. i18n.language may be a region tag ("en-US"), so trim to 2 chars
+// and fall back to Spanish for anything unsupported.
+const currentLang = (): 'es' | 'en' => (i18n.language?.slice(0, 2) === 'en' ? 'en' : 'es')
+
 export const api = {
-  listScenarios: () => request<ScenarioInfo[]>('/api/scenarios'),
+  listScenarios: () =>
+    request<ScenarioInfo[]>(`/api/scenarios?lang=${currentLang()}`),
 
   createGame: (
     scenario_id: string,
@@ -122,6 +129,7 @@ export const api = {
         mode,
         room_name: room_name || null,
         async_mode,
+        language: currentLang(),
       }),
     }),
 

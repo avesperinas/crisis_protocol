@@ -44,26 +44,26 @@ const DEFAULT_THEME: ScenarioTheme = {
 
 const SCENARIO_THEMES: Record<string, ScenarioTheme> = {
   corinth_338: {
-    accent: '#c9a84c', // oro bronce
+    accent: '#c9a84c', // bronze gold
     accentSecondary: '#8b6914',
     texture: 'marble',
-    atmosphere: 'Antigüedad, mármol, poder',
+    atmosphere: 'Antiquity, marble, power',
     sigil: 'laurel',
-    era: '338 a.C.',
+    era: '338 BCE',
   },
   oil_crisis_1973: {
-    accent: '#d4691e', // ámbar petróleo
+    accent: '#d4691e', // oil amber
     accentSecondary: '#8a3a0e',
     texture: 'industrial',
-    atmosphere: 'Años 70, urgencia industrial',
+    atmosphere: '1970s, industrial urgency',
     sigil: 'wave',
     era: '1973',
   },
   arctic_2031: {
-    accent: '#4a9ebf', // azul ártico
+    accent: '#4a9ebf', // arctic blue
     accentSecondary: '#1a5f7a',
     texture: 'ice',
-    atmosphere: 'Frío, tecnológico, silencio',
+    atmosphere: 'Cold, technological, silence',
     sigil: 'diamond',
     era: '2031',
   },

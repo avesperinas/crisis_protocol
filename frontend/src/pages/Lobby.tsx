@@ -10,7 +10,7 @@ import type { LobbyStateView, ScenarioInfo } from '../types/game'
 type Tab = 'solo' | 'join' | 'create-multi'
 
 export function Lobby() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const setSession = useGameStore((s) => s.setSession)
@@ -31,19 +31,23 @@ export function Lobby() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Reload whenever the UI language changes so the scenario/faction text
+  // follows it. Role and scenario ids are language-independent, so preserve any
+  // selection the player already made instead of resetting it.
   useEffect(() => {
     api
       .listScenarios()
       .then((s) => {
         setScenarios(s)
-        if (s[0]) {
-          setScenarioId(s[0].id)
-          setRoleId(s[0].factions[0]?.id ?? '')
-          setJoinRoleId(s[0].factions[0]?.id ?? '')
+        const first = s[0]
+        if (first) {
+          setScenarioId((prev) => (prev && s.some((x) => x.id === prev) ? prev : first.id))
+          setRoleId((prev) => prev || first.factions[0]?.id || '')
+          setJoinRoleId((prev) => prev || first.factions[0]?.id || '')
         }
       })
       .catch((e) => setError(String(e)))
-  }, [])
+  }, [i18n.language])
 
   // Look up the room's actual scenario/slots as soon as a full code is typed —
   // the join-by-code faction picker must reflect the target room, not whatever
