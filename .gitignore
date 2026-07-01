@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+*.db
+*.db-journal
+
+# uv
+.uv/
+
+# Env (never commit real secrets; keep only *.example templates)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Claude Code local config
+.claude/
+
+# Generated game report (regenerable via report.py)
+backend/informe_partida.html

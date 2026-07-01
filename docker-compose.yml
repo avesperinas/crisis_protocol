@@ -1,0 +1,42 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    env_file:
+      - backend/.env
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./crisis_protocol.db
+      # inotify events from a Windows bind mount don't reliably reach the
+      # container — force watchfiles to poll instead, or --reload silently
+      # never fires.
+      WATCHFILES_FORCE_POLLING: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - backend_venv:/app/.venv
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    environment:
+      # Same reasoning as the backend's WATCHFILES_FORCE_POLLING.
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  frontend_node_modules:
+  backend_venv:
