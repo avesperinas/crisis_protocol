@@ -22,7 +22,7 @@ class BotDecision:
 
 
 def decide_stub(
-    *, role_id: str, role_name: str, turn_number: int, token_budget: int
+    *, role_id: str, role_name: str, turn_number: int, token_budget: int, language: str = "es"
 ) -> BotDecision:
     """Distribute the budget pseudo-randomly but reproducibly per (role, turn)."""
     rng = random.Random(f"{role_id}-{turn_number}")
@@ -33,7 +33,9 @@ def decide_stub(
 
     posture = rng.choice(["ambiguous", "cooperative", "confrontational"])
     directive = (
-        f"{role_name} mantiene su posición y observa el desarrollo del turno {turn_number}."
+        f"{role_name} holds its position and watches how turn {turn_number} unfolds."
+        if language == "en"
+        else f"{role_name} mantiene su posición y observa el desarrollo del turno {turn_number}."
     )
     return BotDecision(
         submission=ActionSubmission(
@@ -55,9 +57,10 @@ async def decide_with_claude_or_fallback(
     max_turns: int,
     tension: int,
     resources: dict[str, int],
-    pacts_summary: str = "(ninguno)",
-    previous_narrative: str = "(es el primer turno)",
-    previous_intel: str = "(sin informe previo)",
+    pacts_summary: str = "(none)",
+    previous_narrative: str = "(first turn)",
+    previous_intel: str = "(no previous report)",
+    language: str = "es",
 ) -> BotDecision:
     """Ask Claude for a decision. On failure (no briefing, API error, parse error,
     validation error), fall back to decide_stub.
@@ -70,6 +73,7 @@ async def decide_with_claude_or_fallback(
             role_name=faction.name,
             turn_number=turn_number,
             token_budget=token_budget,
+            language=language,
         )
 
     decision = await ai_service.decide_bot_action(
@@ -84,6 +88,7 @@ async def decide_with_claude_or_fallback(
         pacts_summary=pacts_summary,
         previous_narrative=previous_narrative,
         previous_intel=previous_intel,
+        language=language,
     )
     if decision is None:
         return decide_stub(
@@ -91,6 +96,7 @@ async def decide_with_claude_or_fallback(
             role_name=faction.name,
             turn_number=turn_number,
             token_budget=token_budget,
+            language=language,
         )
 
     # ActionSubmission caps the directive at 300 chars; the bot-decision schema

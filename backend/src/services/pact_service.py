@@ -21,6 +21,16 @@ logger = logging.getLogger("crisis.pact")
 PactType = Literal["alliance", "non_aggression", "trade", "intel_share"]
 
 
+def _pact_reply_note(language: str, faction_name: str, *, accepted: bool, reason: str) -> str:
+    """The bot's public reply appended to a proposal message, in the game language."""
+    reason = reason or ("(no reason)" if language == "en" else "(sin motivo)")
+    if language == "en":
+        verb = "accepted" if accepted else "rejected"
+        return f"Reply from {faction_name}: {verb}. Reason: {reason}"
+    verb = "aceptado" if accepted else "rechazado"
+    return f"Respuesta de {faction_name}: {verb}. Motivo: {reason}"
+
+
 class PactServiceError(ValueError):
     pass
 
@@ -84,7 +94,7 @@ async def propose_pact(
         turn_id=current_turn.id,
         from_player_id=proposer.id,
         to_player_id=target.id,
-        content=_proposal_content(pact_type, terms, is_secret),
+        content=_proposal_content(pact_type, terms, is_secret, game.language),
         is_proposal=True,
         proposal_type=pact_type,
         proposal_status="pending",
@@ -93,7 +103,7 @@ async def propose_pact(
     await session.flush()
 
     # Ask the bot.
-    scenario = get_scenario(game.scenario_id)
+    scenario = get_scenario(game.scenario_id, game.language)
     target_faction = next(f for f in scenario.factions if f.id == target_role_id)
     proposer_faction = next(f for f in scenario.factions if f.id == proposer_role_id)
     pacts_summary = await _summarise_active_pacts(session, game_id, players_by_role)
@@ -101,7 +111,7 @@ async def propose_pact(
     decision = await ai_service.decide_pact_response(
         scenario=scenario,
         faction=target_faction,
-        briefing=target.briefing or "(sin briefing disponible)",
+        briefing=target.briefing or "(no briefing available)",
         proposer_role_id=proposer_role_id,
         proposer_name=proposer_faction.name,
         pact_type=pact_type,
@@ -112,13 +122,16 @@ async def propose_pact(
         tension=game.tension,
         resources=dict(target.resources),
         pacts_summary=pacts_summary,
+        language=game.language,
     )
 
     if not decision.accept:
         proposal.proposal_status = "rejected"
         proposal.content = (
-            f"{proposal.content}\n\nRespuesta de {target_faction.name}: rechazado. "
-            f"Motivo: {decision.reason or '(sin motivo)'}"
+            f"{proposal.content}\n\n"
+            + _pact_reply_note(
+                game.language, target_faction.name, accepted=False, reason=decision.reason
+            )
         )
         await session.commit()
         return ProposalResult(
@@ -142,8 +155,10 @@ async def propose_pact(
     session.add(pact)
     proposal.proposal_status = "accepted"
     proposal.content = (
-        f"{proposal.content}\n\nRespuesta de {target_faction.name}: aceptado. "
-        f"Motivo: {decision.reason or '(sin motivo)'}"
+        f"{proposal.content}\n\n"
+        + _pact_reply_note(
+            game.language, target_faction.name, accepted=True, reason=decision.reason
+        )
     )
     await session.commit()
     return ProposalResult(
@@ -230,7 +245,7 @@ async def _summarise_active_pacts(
         .all()
     )
     if not pacts:
-        return "(ninguno)"
+        return "(none)"
     role_by_uuid = {p.id: p.role_id for p in players_by_role.values()}
     return "; ".join(
         f"{role_by_uuid.get(p.player_a_id, '?')}<->{role_by_uuid.get(p.player_b_id, '?')} ({p.type})"
@@ -244,7 +259,16 @@ def _build_terms(pact_type: str, custom_terms: dict | None) -> dict | None:
     return None
 
 
-def _proposal_content(pact_type: str, terms: dict | None, is_secret: bool) -> str:
+def _proposal_content(
+    pact_type: str, terms: dict | None, is_secret: bool, language: str = "es"
+) -> str:
+    if language == "en":
+        base = f"Pact proposal: {pact_type}"
+        if is_secret:
+            base += " (secret)"
+        if terms:
+            base += f" — terms: {_terms_text(pact_type, terms)}"
+        return base
     base = f"Propuesta de pacto: {pact_type}"
     if is_secret:
         base += " (secreto)"

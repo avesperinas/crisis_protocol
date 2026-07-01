@@ -27,6 +27,18 @@ from src.services.state_loader import load_game_state
 logger = logging.getLogger("crisis.turn")
 
 
+def _intel_unavailable(language: str) -> str:
+    return "No new information this turn." if language == "en" else "Sin información nueva este turno."
+
+
+def _auto_action_directive(language: str) -> str:
+    return (
+        "(time expired — automatic action)"
+        if language == "en"
+        else "(tiempo agotado — acción automática)"
+    )
+
+
 class TurnServiceError(ValueError):
     pass
 
@@ -74,7 +86,7 @@ async def submit_human_action(
         return False, f"action submitted — waiting for {remaining} more player(s)"
 
     # All humans submitted: fill bots and resolve.
-    scenario = get_scenario(game.scenario_id)
+    scenario = get_scenario(game.scenario_id, game.language)
     bot_targets = [
         (role, player)
         for role, player in players_by_role.items()
@@ -102,7 +114,7 @@ async def _resolve_turn_full(
     session: AsyncSession, ai_service: AIService, game_id: str
 ) -> None:
     game, players_by_role, turn = await _load_game_turn(session, game_id)
-    scenario = get_scenario(game.scenario_id)
+    scenario = get_scenario(game.scenario_id, game.language)
 
     actions_result = (
         await session.execute(select(Action).where(Action.turn_id == turn.id))
@@ -185,7 +197,7 @@ async def _resolve_turn_full(
     resolved_summary = _summarise_resolved_actions(result, scenario)
     pacts_active = state.pacts
     pacts_summary = (
-        "(ninguno)"
+        "(none)"
         if not pacts_active
         else "; ".join(
             f"{p.player_a_id}<->{p.player_b_id} ({p.type})"
@@ -206,13 +218,14 @@ async def _resolve_turn_full(
         resolved_summary=resolved_summary,
         pacts_summary=pacts_summary,
         threshold_note=threshold_note,
+        language=game.language,
     )
     turn.narrative = narrative
 
     async def _gen(a: Action) -> str:
         role = role_by_uuid[a.player_id]
         faction = next(f for f in scenario.factions if f.id == role)
-        own_action = f"Postura: {a.posture}. Directiva: {a.directive!r}."
+        own_action = f"Posture: {a.posture}. Directive: {a.directive!r}."
         int_level = players_by_role[role].resources.get("INT", 0)
         try:
             return await ai_service.generate_intel(
@@ -222,10 +235,11 @@ async def _resolve_turn_full(
                 int_level=int_level,
                 public_summary=resolved_summary[:1000],
                 own_action=own_action,
+                language=game.language,
             )
         except Exception as e:  # noqa: BLE001
             logger.warning("Intel generation failed for %s: %s", role, e)
-            return "Sin información nueva este turno."
+            return _intel_unavailable(game.language)
 
     intel_texts = await asyncio.gather(*(_gen(a) for a in actions_result))
     for a, text in zip(actions_result, intel_texts, strict=True):
@@ -295,7 +309,7 @@ async def _auto_submit_timeout(game_id: str, turn_number: int, timeout_seconds: 
             )
             players_by_role = {p.role_id: p for p in players}
             submitted_ids = await _existing_action_player_ids(session, turn.id)
-            scenario = get_scenario(game.scenario_id)
+            scenario = get_scenario(game.scenario_id, game.language)
             factions_by_id = {f.id: f for f in scenario.factions}
 
             idle_humans = [p for p in players if not p.is_ai and p.id not in submitted_ids]
@@ -310,7 +324,7 @@ async def _auto_submit_timeout(game_id: str, turn_number: int, timeout_seconds: 
                 auto = ActionSubmission(
                     posture="ambiguous",
                     tokens=TokenAllocationDTO(MIL=per, DIP=per + rem, ECO=per, INT=per),
-                    directive="(tiempo agotado — acción automática)",
+                    directive=_auto_action_directive(game.language),
                 )
                 _persist_action(session, turn.id, player.id, auto)
                 logger.info(
@@ -373,7 +387,8 @@ async def _collect_bot_decisions(
             resources=dict(player.resources),
             pacts_summary=pacts_summary,
             previous_narrative=previous_narrative,
-            previous_intel=intel_by_role.get(role, "(sin informe previo)"),
+            previous_intel=intel_by_role.get(role, "(no previous report)"),
+            language=game.language,
         )
 
     results = await asyncio.gather(
@@ -392,6 +407,7 @@ async def _collect_bot_decisions(
                     role_name=faction.name,
                     turn_number=current_turn.turn_number,
                     token_budget=faction.token_budget_per_turn,
+                    language=game.language,
                 )
             )
         else:
@@ -403,16 +419,16 @@ async def _previous_turn_context(
     session: AsyncSession, game_id: str, current_turn_number: int
 ) -> tuple[str, dict[str, str]]:
     if current_turn_number <= 1:
-        return "(es el primer turno)", {}
+        return "(first turn)", {}
     prev_turn = (
         await session.execute(
             select(Turn).where(Turn.game_id == game_id, Turn.turn_number == current_turn_number - 1)
         )
     ).scalar_one_or_none()
     if not prev_turn:
-        return "(turno previo no disponible)", {}
+        return "(previous turn unavailable)", {}
 
-    previous_narrative = prev_turn.narrative or "(sin narrativa disponible)"
+    previous_narrative = prev_turn.narrative or "(no narrative available)"
     actions = (
         (await session.execute(select(Action).where(Action.turn_id == prev_turn.id))).scalars().all()
     )
@@ -441,7 +457,7 @@ async def _pacts_summary(session: AsyncSession, game_id: str) -> str:
         .all()
     )
     if not pacts:
-        return "(ninguno)"
+        return "(none)"
     players = (
         (await session.execute(select(Player).where(Player.game_id == game_id))).scalars().all()
     )
@@ -497,9 +513,9 @@ def _summarise_resolved_actions(result, scenario) -> str:
     for ra in result.resolved_actions:
         a = ra.action
         line = (
-            f"{a.player_id} | postura={a.posture} | tipo={a.action_type.value}"
-            + (f" | objetivo={a.target_id}" if a.target_id else "")
-            + f"\n  directiva: {a.directive}"
+            f"{a.player_id} | posture={a.posture} | type={a.action_type.value}"
+            + (f" | target={a.target_id}" if a.target_id else "")
+            + f"\n  directive: {a.directive}"
         )
         effects = ra.final_effects
         resource_changes = {
@@ -509,10 +525,10 @@ def _summarise_resolved_actions(result, scenario) -> str:
         }
         if resource_changes:
             changes_str = "; ".join(f"{role}: {ch}" for role, ch in resource_changes.items())
-            line += f"\n  efectos sobre recursos: {changes_str}"
+            line += f"\n  resource effects: {changes_str}"
         if effects.tension_delta != 0:
-            line += f"\n  impacto en tensión: {effects.tension_delta:+d}"
+            line += f"\n  tension impact: {effects.tension_delta:+d}"
         if effects.espionage_revealed:
-            line += "\n  espionaje revelado"
+            line += "\n  espionage revealed"
         chunks.append(line)
     return "\n\n".join(chunks)

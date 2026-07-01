@@ -9,6 +9,9 @@ For each action submitted this turn, Claude must produce:
 - coherence_score: 0.0..1.0 (how well do tokens back the directive?)
 - decision_quality: 0..10 (against the role's rubric)
 - decision_quality_reasoning: short string
+
+The output is JSON consumed by the engine; `decision_quality_reasoning` is
+internal and never shown to players, so this prompt is not localized.
 """
 
 from src.ai.client import cacheable
@@ -30,51 +33,51 @@ _ALLOWED_ACTION_TYPES = [
 ]
 
 
-SYSTEM_TEMPLATE = """Eres el sistema de evaluación de Crisis Protocol. Analizas las acciones de un turno y produces scores y clasificaciones que el engine usa para calcular efectos reales sobre los recursos.
+SYSTEM_TEMPLATE = """You are the evaluation system of Crisis Protocol. You analyze a turn's actions and produce the scores and classifications the engine uses to compute the real effects on resources.
 
-ESCENARIO: {scenario_name}
-CONTEXTO:
+SCENARIO: {scenario_name}
+CONTEXT:
 {scenario_context}
 
-RUBRICS DE CALIDAD POR FACCIÓN:
+QUALITY RUBRICS BY FACTION:
 {rubrics_block}
 
-ACTION TYPES DISPONIBLES (elige siempre el más específico posible):
+AVAILABLE ACTION TYPES (always pick the most specific one possible):
 {action_types}
 
-REGLAS DE CLASIFICACIÓN (crítico — el engine aplica efectos distintos según el tipo):
-- "military_offensive": directiva que busca dañar recursos MIL del target. Requiere target_id.
-- "military_defensive": directiva que busca proteger los propios recursos MIL.
-- "diplomatic_proposal": oferta formal a otro actor. Requiere target_id.
-- "diplomatic_mediation": intervención para reducir tensión entre terceros. Requiere target_id.
-- "economic_sanction": presión económica contra otro actor. Requiere target_id.
-- "economic_aid": transferencia de recursos ECO a otro actor. Requiere target_id.
-- "intel_espionage": recopilación de información sobre otro actor. Requiere target_id.
-- "intel_counter": defensa propia contra operaciones de inteligencia enemigas.
-- "info_expose": revelación pública de información dañina sobre otro actor. Requiere target_id.
-- "pact_break": ruptura unilateral de un pacto existente. Requiere target_id.
-- "generic": SOLO si la directiva es genuinamente vaga y no encaja en ningún tipo anterior.
+CLASSIFICATION RULES (critical — the engine applies different effects per type):
+- "military_offensive": a directive seeking to damage the target's MIL resources. Requires target_id.
+- "military_defensive": a directive seeking to protect one's own MIL resources.
+- "diplomatic_proposal": a formal offer to another actor. Requires target_id.
+- "diplomatic_mediation": intervention to reduce tension between third parties. Requires target_id.
+- "economic_sanction": economic pressure against another actor. Requires target_id.
+- "economic_aid": transfer of ECO resources to another actor. Requires target_id.
+- "intel_espionage": gathering information about another actor. Requires target_id.
+- "intel_counter": one's own defense against enemy intelligence operations.
+- "info_expose": public disclosure of damaging information about another actor. Requires target_id.
+- "pact_break": unilateral breaking of an existing pact. Requires target_id.
+- "generic": ONLY if the directive is genuinely vague and fits none of the types above.
 
-REGLA CLAVE: si la directiva menciona un actor concreto (macedonia, atenas, esparta, tebas, corinto, persia) como objeto de la acción, DEBES clasificarla en un tipo no-generic y poner ese actor en target_id. Usar "generic" con un target obvio es un error.
+KEY RULE: if the directive names a specific actor (its role_id) as the object of the action, you MUST classify it into a non-generic type and put that actor in target_id. Using "generic" with an obvious target is an error.
 
-REGLAS DE SCORING:
-1. coherence_score 0.0..1.0 — ¿los tokens invertidos respaldan la directiva?
-   - 1.0: tokens perfectamente alineados (ej: DIP alto para propuesta diplomática)
-   - 0.7: parcialmente alineados
-   - 0.4: tokens insuficientes o mal distribuidos para la ambición declarada
-   - 0.0: imposible con esos recursos
+SCORING RULES:
+1. coherence_score 0.0..1.0 — do the invested tokens back the directive?
+   - 1.0: tokens perfectly aligned (e.g. high DIP for a diplomatic proposal)
+   - 0.7: partially aligned
+   - 0.4: insufficient or poorly distributed tokens for the stated ambition
+   - 0.0: impossible with those resources
 
-2. decision_quality 0..10 contra la rubric del rol. No premies "ganar", premia "decidir bien dado lo que sabía".
+2. decision_quality 0..10 against the role's rubric. Do not reward "winning"; reward "deciding well given what it knew".
 
-3. effective_multiplier 0.3..1.2 — multiplicador final que el engine aplica a los efectos:
-   - 1.2: coherencia perfecta + postura alineada + decisión excelente
-   - 1.0: baseline sin bonus ni penalización
-   - 0.5: coherencia baja o postura contradictoria
-   - 0.3: directiva incoherente o farol obvio
+3. effective_multiplier 0.3..1.2 — the final multiplier the engine applies to the effects:
+   - 1.2: perfect coherence + aligned posture + excellent decision
+   - 1.0: baseline, no bonus or penalty
+   - 0.5: low coherence or contradictory posture
+   - 0.3: incoherent directive or obvious bluff
 
-IMPORTANTE — BREVEDAD: "decision_quality_reasoning" es interno (no se muestra al usuario). Máximo una frase corta por acción. Evalúas varias facciones en la misma respuesta — no te extiendas en ninguna, o te quedarás sin espacio para las últimas.
+IMPORTANT — BREVITY: "decision_quality_reasoning" is internal (not shown to the user). At most one short sentence per action. You evaluate several factions in the same response — do not go long on any of them, or you will run out of space for the last ones.
 
-DEVUELVE SOLO JSON. Sin texto fuera del JSON. Sin markdown ni code fences:
+RETURN JSON ONLY. No text outside the JSON. No markdown or code fences:
 
 {{
   "evaluations": [
@@ -92,19 +95,19 @@ DEVUELVE SOLO JSON. Sin texto fuera del JSON. Sin markdown ni code fences:
 }}"""
 
 
-USER_TEMPLATE = """Turno {turn_number} de {max_turns}. Tensión global al inicio: {tension_start}.
+USER_TEMPLATE = """Turn {turn_number} of {max_turns}. Global tension at start: {tension_start}.
 
-PACTOS ACTIVOS:
+ACTIVE PACTS:
 {pacts_block}
 
-EVENTOS / NOTAS PREVIAS:
+PREVIOUS EVENTS / NOTES:
 {previous_events}
 
-ACCIONES DE ESTE TURNO (player_id es el role_id de cada facción):
+ACTIONS THIS TURN (player_id is each faction's role_id):
 
 {actions_block}
 
-Devuelve el JSON ahora."""
+Return the JSON now."""
 
 
 def render_evaluation(
@@ -115,7 +118,7 @@ def render_evaluation(
     tension_start: int,
     actions: list[dict],
     active_pacts: list[dict] | None = None,
-    previous_events: str = "(ninguno)",
+    previous_events: str = "(none)",
 ) -> tuple[list[dict], str]:
     """Return (system_blocks, user_message).
 
@@ -140,11 +143,11 @@ def render_evaluation(
 
     if active_pacts:
         pacts_block = "\n".join(
-            f"- {p['a']} <-> {p['b']}: {p['type']}" + (" (secreto)" if p.get("is_secret") else "")
+            f"- {p['a']} <-> {p['b']}: {p['type']}" + (" (secret)" if p.get("is_secret") else "")
             for p in active_pacts
         )
     else:
-        pacts_block = "(ninguno)"
+        pacts_block = "(none)"
 
     actions_block = "\n\n".join(
         f"{i + 1}. player_id: {a['player_id']}\n"

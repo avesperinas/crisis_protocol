@@ -1,41 +1,44 @@
 """Public turn narrative prompt — 2-3 short paragraphs of journalistic prose."""
 
 from src.ai.client import cacheable
+from src.ai.prompts._common import output_language_instruction
 from src.schemas.scenario import Scenario
 
-SYSTEM_TEMPLATE = """Eres el narrador de Crisis Protocol. Tu única función es convertir los eventos reales del turno en prosa histórica concisa.
+SYSTEM_TEMPLATE = """You are the narrator of Crisis Protocol. Your only job is to turn the turn's actual events into concise historical prose.
 
-ESCENARIO: {scenario_name}
-CONTEXTO:
+SCENARIO: {scenario_name}
+CONTEXT:
 {scenario_context}
 
-REGLAS ABSOLUTAS:
-1. GROUNDING — cada frase debe derivarse directamente de las acciones y efectos del resumen. NO inventes eventos, actores, propuestas ni consecuencias que no aparezcan en el resumen.
-2. FIDELIDAD — si una directiva dice "asesinar a X", narra ese intento. Si dice "proponer alianza a Y", narra esa propuesta. Traduce la directiva a lenguaje histórico sin citarla literalmente.
-3. CONSECUENCIAS — si hubo cambios de recursos o tensión, refléjalos como hechos observables ("la delegación macedónica se retiró debilitada", "la tensión en la sala escaló bruscamente").
-4. NO INVENTAR — prohibido añadir facciones, propuestas o eventos que no estén en el resumen.
-5. Sin markdown, sin listas. Prosa pura.
-6. CALIBRACIÓN DE TENSIÓN — la intensidad dramática del lenguaje debe ser proporcional a TENSIÓN (el valor final de este turno), no a tu impresión de los eventos:
-   - <30: distensión, calma, normalidad diplomática.
-   - 30-60: cautela, fricción contenida.
-   - 60-85: alarma, riesgo visible.
-   - >85: crisis abierta.
-   Si TENSIÓN es baja, NO uses lenguaje de "crisis", "niveles críticos" o "polarización" aunque haya habido posturas confrontacionales puntuales — esas posturas ya se reflejan en el resumen, no las dramatices más allá del número real.
-7. Total: 1 párrafo. Máximo 100 palabras."""
+ABSOLUTE RULES:
+1. GROUNDING — every sentence must derive directly from the actions and effects in the summary. Do NOT invent events, actors, proposals or consequences that are not in the summary.
+2. FIDELITY — if a directive says "assassinate X", narrate that attempt. If it says "propose an alliance to Y", narrate that proposal. Translate the directive into historical language without quoting it literally.
+3. CONSEQUENCES — if there were resource or tension changes, reflect them as observable facts ("the Macedonian delegation withdrew weakened", "tension in the room escalated sharply").
+4. DO NOT INVENT — adding factions, proposals or events not in the summary is forbidden.
+5. No markdown, no lists. Pure prose.
+6. TENSION CALIBRATION — the dramatic intensity of the language must be proportional to TENSION (the final value of this turn), not to your impression of the events:
+   - <30: détente, calm, diplomatic normalcy.
+   - 30-60: caution, contained friction.
+   - 60-85: alarm, visible risk.
+   - >85: open crisis.
+   If TENSION is low, do NOT use language of "crisis", "critical levels" or "polarization" even if there were isolated confrontational postures — those postures are already reflected in the summary; do not dramatize them beyond the actual number.
+7. Total: 1 paragraph. Maximum 100 words.
+
+{language_instruction}"""
 
 
-USER_TEMPLATE = """Turno {turn_number} de {max_turns}.
+USER_TEMPLATE = """Turn {turn_number} of {max_turns}.
 
-TENSIÓN: {tension_start} → {tension_end}
-PACTOS ACTIVOS: {pacts_summary}
-PACTOS NUEVOS: {new_pacts}
-PACTOS ROTOS: {broken_pacts}
+TENSION: {tension_start} → {tension_end}
+ACTIVE PACTS: {pacts_summary}
+NEW PACTS: {new_pacts}
+BROKEN PACTS: {broken_pacts}
 {threshold_note}
 
-ACCIONES Y EFECTOS REALES DE ESTE TURNO (narra SOLO lo que aparece aquí):
+ACTUAL ACTIONS AND EFFECTS THIS TURN (narrate ONLY what appears here):
 {resolved_summary}
 
-Escribe el párrafo narrativo ahora."""
+Write the narrative paragraph now."""
 
 
 def render_narrative(
@@ -46,15 +49,17 @@ def render_narrative(
     tension_start: int,
     tension_end: int,
     resolved_summary: str,
-    pacts_summary: str = "(ninguno)",
-    new_pacts: str = "(ninguno)",
-    broken_pacts: str = "(ninguno)",
+    pacts_summary: str = "(none)",
+    new_pacts: str = "(none)",
+    broken_pacts: str = "(none)",
     threshold_note: str = "",
+    language: str = "es",
 ) -> tuple[list[dict], str]:
     system = cacheable(
         SYSTEM_TEMPLATE.format(
             scenario_name=scenario.name,
             scenario_context=scenario.context,
+            language_instruction=output_language_instruction(language),
         )
     )
     user = USER_TEMPLATE.format(
@@ -66,6 +71,6 @@ def render_narrative(
         resolved_summary=resolved_summary,
         new_pacts=new_pacts,
         broken_pacts=broken_pacts,
-        threshold_note=("\nNOTA: " + threshold_note) if threshold_note else "",
+        threshold_note=("\nNOTE: " + threshold_note) if threshold_note else "",
     )
     return system, user

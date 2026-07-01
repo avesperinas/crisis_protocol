@@ -35,6 +35,11 @@ class Game(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     scenario_id: Mapped[str] = mapped_column(String, nullable=False)
+    # Language for all of this game's content: localized scenario text + every
+    # AI-generated, player-facing string. Chosen at creation (defaults to the
+    # creator's locale). One language per game keeps the shared narrative
+    # coherent across players. See src/scenarios/localize.py.
+    language: Mapped[str] = mapped_column(String, nullable=False, default="es")
     status: Mapped[str] = mapped_column(String, nullable=False, default=GameStatus.LOBBY.value)
     current_turn: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     max_turns: Mapped[int] = mapped_column(Integer, nullable=False)

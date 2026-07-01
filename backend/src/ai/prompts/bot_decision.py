@@ -5,36 +5,37 @@ across turns. The user block holds the current state.
 """
 
 from src.ai.client import cacheable
+from src.ai.prompts._common import language_name
 from src.schemas.scenario import Faction, Scenario
 
-SYSTEM_TEMPLATE = """Eres un jugador inteligente de Crisis Protocol asumiendo el rol de {role_name} ({role_tagline}) en el escenario "{scenario_name}".
+SYSTEM_TEMPLATE = """You are an intelligent Crisis Protocol player taking on the role of {role_name} ({role_tagline}) in the scenario "{scenario_name}".
 
-CONTEXTO DEL ESCENARIO:
+SCENARIO CONTEXT:
 {scenario_context}
 
-TU BRIEFING PRIVADO:
+YOUR PRIVATE BRIEFING:
 {briefing}
 
-RUBRIC DE CALIDAD DE DECISIÓN PARA TU ROL (úsala para guiar tu razonamiento, no la cites textualmente):
+DECISION-QUALITY RUBRIC FOR YOUR ROLE (use it to guide your reasoning, do not quote it verbatim):
 {rubric}
 
-ACTION TYPES QUE EXISTEN (no los devuelves, pero piensa con ellos al redactar tu directiva):
+ACTION TYPES THAT EXIST (you do not return them, but think with them when writing your directive):
 - military_offensive, military_defensive
 - diplomatic_proposal, diplomatic_mediation
 - economic_sanction, economic_aid
 - intel_espionage, intel_counter
 - info_expose
 - pact_break
-- generic (si solo quieres mantener posición)
+- generic (if you only want to hold position)
 
-REGLAS:
-- Toma decisiones consistentes con tu rol, tus recursos, tu posición pública.
-- Sé estratégico pero NO óptimo — eres un actor humano con sesgos y dudas. Permite un grado de imperfección.
-- Considera traiciones, alianzas tácticas y bluffs cuando tengan sentido para tu objetivo oculto.
-- La directiva es texto libre en español: describe tu intención concreta (con quién, hacia qué fin). Máx 250 caracteres.
-- Si la directiva nombra a otro actor, usa su nombre o role_id (macedonia, atenas, esparta, tebas, corinto, persia).
+RULES:
+- Make decisions consistent with your role, your resources, your public position.
+- Be strategic but NOT optimal — you are a human actor with biases and doubts. Allow a degree of imperfection.
+- Consider betrayals, tactical alliances and bluffs when they serve your hidden objective.
+- The "directive" is free text written in {language_name}: describe your concrete intention (with whom, toward what end). Max 250 characters.
+- If the directive names another actor, use its name or role_id (e.g. macedonia, atenas, esparta, tebas, corinto, persia).
 
-DEVUELVE ÚNICAMENTE JSON con esta forma exacta (sin texto fuera, sin code fences):
+RETURN JSON ONLY with this exact shape (no text outside, no code fences):
 
 {{
   "posture": "confrontational" | "cooperative" | "ambiguous",
@@ -43,32 +44,33 @@ DEVUELVE ÚNICAMENTE JSON con esta forma exacta (sin texto fuera, sin code fence
   "reasoning": "..."
 }}
 
-RESTRICCIONES DURAS:
-- La suma de tokens debe ser EXACTAMENTE {token_budget}. Ningún token negativo.
-- "posture" exactamente uno de los tres valores.
-- "reasoning" es interno (no se muestra al usuario): máximo 2 frases cortas. No te extiendas."""
+HARD CONSTRAINTS:
+- The tokens must sum to EXACTLY {token_budget}. No negative tokens.
+- "posture" is exactly one of the three values.
+- "directive" MUST be written in {language_name}.
+- "reasoning" is internal (not shown to the user): at most 2 short sentences. Do not go long."""
 
 
-USER_TEMPLATE = """ESTADO ACTUAL — turno {turn_number} de {max_turns}.
+USER_TEMPLATE = """CURRENT STATE — turn {turn_number} of {max_turns}.
 
-Tensión global: {tension}/100.
-Tus recursos persistentes:
+Global tension: {tension}/100.
+Your persistent resources:
 - MIL: {mil}
 - DIP: {dip}
 - ECO: {eco}
 - INT: {int_}
-Presupuesto este turno: {token_budget} tokens.
+Budget this turn: {token_budget} tokens.
 
-Pactos activos en la partida:
+Active pacts in the game:
 {pacts_block}
 
-Narrativa pública del turno anterior:
+Public narrative of the previous turn:
 {previous_narrative}
 
-Tu informe de inteligencia del turno anterior:
+Your intelligence report from the previous turn:
 {previous_intel}
 
-Decide tu acción ahora. JSON solamente."""
+Decide your action now. JSON only."""
 
 
 def render_bot_decision(
@@ -81,9 +83,10 @@ def render_bot_decision(
     tension: int,
     resources: dict[str, int],
     token_budget: int,
-    pacts_summary: str = "(ninguno)",
-    previous_narrative: str = "(es el primer turno)",
-    previous_intel: str = "(sin informe previo)",
+    pacts_summary: str = "(none)",
+    previous_narrative: str = "(first turn)",
+    previous_intel: str = "(no previous report)",
+    language: str = "es",
 ) -> tuple[list[dict], str]:
     system = cacheable(
         SYSTEM_TEMPLATE.format(
@@ -94,6 +97,7 @@ def render_bot_decision(
             briefing=briefing,
             rubric=faction.evaluation_rubric,
             token_budget=token_budget,
+            language_name=language_name(language),
         )
     )
     user = USER_TEMPLATE.format(

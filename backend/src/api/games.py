@@ -48,6 +48,9 @@ async def create_game_endpoint(
     ai_service: AIService = Depends(get_ai_service),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> GameCreatedResponse:
+    # Game language: explicit payload wins, else the creator's account locale,
+    # else Spanish. One language per game (see Game.language).
+    language = payload.language or (current_user.locale if current_user else "es")
     try:
         game, human = await create_game(
             session,
@@ -57,6 +60,7 @@ async def create_game_endpoint(
             account_id=current_user.id if current_user else None,
             room_name=payload.room_name,
             async_mode=payload.async_mode,
+            language=language,
         )
     except GameServiceError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -120,7 +124,7 @@ async def start_game_endpoint(
 async def _build_lobby_view(
     session: AsyncSession, game: Game, *, requester_role_id: str | None
 ) -> LobbyStateView:
-    scenario = get_scenario(game.scenario_id)
+    scenario = get_scenario(game.scenario_id, game.language)
     players = (
         (await session.execute(select(Player).where(Player.game_id == game.id))).scalars().all()
     )
@@ -195,12 +199,14 @@ async def get_game_state(
     you = next((p for p in players if p.role_id == role_id), None)
     if not you:
         raise HTTPException(404, "role not in this game")
-    scenario = get_scenario(game.scenario_id)
+    scenario = get_scenario(game.scenario_id, game.language)
     faction_by_id = {f.id: f for f in scenario.factions}
 
     # Generate briefing on demand if not cached.
     if not you.briefing and not you.is_ai:
-        you.briefing = await ai_service.generate_briefing(scenario, faction_by_id[you.role_id])
+        you.briefing = await ai_service.generate_briefing(
+            scenario, faction_by_id[you.role_id], game.language
+        )
         await session.commit()
 
     current_turn = (
@@ -320,7 +326,7 @@ async def get_final_result(
         raise HTTPException(404, "game not found")
     if game.status != "finished":
         raise HTTPException(409, "game is not finished yet")
-    scenario = get_scenario(game.scenario_id)
+    scenario = get_scenario(game.scenario_id, game.language)
     history = await load_game_history(session, game_id)
 
     players = (

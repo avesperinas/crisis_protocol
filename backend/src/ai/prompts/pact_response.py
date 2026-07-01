@@ -1,53 +1,54 @@
 """Bot pact response prompt: should this bot accept or reject an incoming pact proposal?"""
 
 from src.ai.client import cacheable
+from src.ai.prompts._common import language_name
 from src.schemas.scenario import Faction, Scenario
 
-SYSTEM_TEMPLATE = """Eres {role_name} ({role_tagline}) en Crisis Protocol, escenario "{scenario_name}". Acabas de recibir una propuesta de pacto y debes decidir si aceptas.
+SYSTEM_TEMPLATE = """You are {role_name} ({role_tagline}) in Crisis Protocol, scenario "{scenario_name}". You have just received a pact proposal and must decide whether to accept.
 
-CONTEXTO DEL ESCENARIO:
+SCENARIO CONTEXT:
 {scenario_context}
 
-TU BRIEFING:
+YOUR BRIEFING:
 {briefing}
 
-RUBRIC INTERNA (informa tu decisión, no la cites):
+INTERNAL RUBRIC (informs your decision, do not quote it):
 {rubric}
 
-TIPOS DE PACTO Y EFECTOS:
-- alliance: +15% efectividad en acciones contra targets comunes
-- non_aggression: -30% daño en agresiones mutuas
-- trade: intercambio de recursos cada turno
-- intel_share: informes de inteligencia más detallados
+PACT TYPES AND EFFECTS:
+- alliance: +15% effectiveness on actions against shared targets
+- non_aggression: -30% damage on mutual aggression
+- trade: resource exchange each turn
+- intel_share: more detailed intelligence reports
 
-REGLAS:
-- Acepta solo si el pacto sirve a tus objetivos. Considera que los pactos quedan registrados públicamente.
-- Si tu objetivo oculto se vería comprometido o expuesto, rechaza.
-- Si el proponente es rival natural y el pacto te debilita estratégicamente, rechaza.
-- Si el pacto refuerza tu posición sin coste obvio, acepta.
+RULES:
+- Accept only if the pact serves your objectives. Note that pacts are recorded publicly.
+- If your hidden objective would be compromised or exposed, reject.
+- If the proposer is a natural rival and the pact weakens you strategically, reject.
+- If the pact strengthens your position at no obvious cost, accept.
 
-DEVUELVE ÚNICAMENTE JSON. Sin texto fuera, sin code fences.
+RETURN JSON ONLY. No text outside, no code fences.
 
 {{
   "accept": true,
   "reason": "..."
 }}
 
-"reason" debe ser una sola frase corta (máximo 20 palabras). No te extiendas."""
+"reason" must be a single short sentence (max 20 words), written in {language_name}. Do not go long."""
 
-USER_TEMPLATE = """Propuesta recibida en el turno {turn_number} de {max_turns}.
+USER_TEMPLATE = """Proposal received on turn {turn_number} of {max_turns}.
 
-Quien propone: {proposer_name} ({proposer_id})
-Tipo de pacto: {pact_type}
-Pacto secreto: {is_secret}
-Términos: {terms}
+Proposer: {proposer_name} ({proposer_id})
+Pact type: {pact_type}
+Secret pact: {is_secret}
+Terms: {terms}
 
-Estado actual del juego:
-- Tensión global: {tension}/100
-- Tus recursos: MIL {mil} · DIP {dip} · ECO {eco} · INT {int_}
-- Pactos activos: {pacts_summary}
+Current game state:
+- Global tension: {tension}/100
+- Your resources: MIL {mil} · DIP {dip} · ECO {eco} · INT {int_}
+- Active pacts: {pacts_summary}
 
-¿Aceptas? Responde con el JSON ahora."""
+Do you accept? Respond with the JSON now."""
 
 
 def render_pact_response(
@@ -65,6 +66,7 @@ def render_pact_response(
     tension: int,
     resources: dict[str, int],
     pacts_summary: str,
+    language: str = "es",
 ) -> tuple[list[dict], str]:
     system = cacheable(
         SYSTEM_TEMPLATE.format(
@@ -74,6 +76,7 @@ def render_pact_response(
             scenario_context=scenario.context,
             briefing=briefing,
             rubric=faction.evaluation_rubric,
+            language_name=language_name(language),
         )
     )
     user = USER_TEMPLATE.format(
@@ -82,7 +85,7 @@ def render_pact_response(
         proposer_id=proposer_role_id,
         proposer_name=proposer_name,
         pact_type=pact_type,
-        is_secret="sí" if is_secret else "no",
+        is_secret="yes" if is_secret else "no",
         terms=terms_text,
         tension=tension,
         mil=resources.get("MIL", 0),

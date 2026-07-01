@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models import Game, GameStatus, Player, Turn, TurnStatus
-from src.scenarios import get_scenario
+from src.scenarios import get_scenario, normalize_language
 from src.services.ai_service import AIService
 
 logger = logging.getLogger("crisis.game")
@@ -36,6 +36,7 @@ async def create_game(
     account_id: str | None = None,
     room_name: str | None = None,
     async_mode: bool = False,
+    language: str = "es",
 ) -> tuple[Game, Player]:
     """Create a Game + players.
 
@@ -44,8 +45,12 @@ async def create_game(
 
     account_id: if the creator is authenticated, Player.user_id is set to their real
     account id (enables future stats/history). Guests get a throwaway UUID.
+
+    language: language for scenario content and AI text for the whole game
+    (defaults to the creator's locale). One language per game — see Game.language.
     """
-    scenario = get_scenario(scenario_id)
+    language = normalize_language(language)
+    scenario = get_scenario(scenario_id, language)
     faction_ids = {f.id for f in scenario.factions}
     if human_role_id not in faction_ids:
         raise GameServiceError(f"role {human_role_id!r} is not in scenario {scenario_id!r}")
@@ -53,6 +58,7 @@ async def create_game(
     join_code = _generate_join_code() if mode == "multiplayer" else None
     game = Game(
         scenario_id=scenario_id,
+        language=language,
         max_turns=scenario.max_turns,
         status=GameStatus.ACTIVE.value if mode == "solo" else GameStatus.LOBBY.value,
         current_turn=1 if mode == "solo" else 0,
@@ -124,7 +130,7 @@ async def join_game(
     if game.status != GameStatus.LOBBY.value:
         raise GameServiceError("game has already started or finished")
 
-    scenario = get_scenario(game.scenario_id)
+    scenario = get_scenario(game.scenario_id, game.language)
     if role_id not in {f.id for f in scenario.factions}:
         raise GameServiceError(f"role {role_id!r} not in scenario {game.scenario_id!r}")
 
@@ -164,7 +170,7 @@ async def start_game(
     if game.host_role_id != requester_role_id:
         raise GameServiceError("only the host can start the game")
 
-    scenario = get_scenario(game.scenario_id)
+    scenario = get_scenario(game.scenario_id, game.language)
     existing = (
         (await session.execute(select(Player).where(Player.game_id == game_id))).scalars().all()
     )
@@ -207,7 +213,7 @@ async def pregenerate_briefings(
 ) -> None:
     """Generate a briefing for every player that doesn't have one yet. Errors are logged and skipped."""
     game = (await session.execute(select(Game).where(Game.id == game_id))).scalar_one()
-    scenario = get_scenario(game.scenario_id)
+    scenario = get_scenario(game.scenario_id, game.language)
     factions_by_id = {f.id: f for f in scenario.factions}
     players = (
         (await session.execute(select(Player).where(Player.game_id == game_id))).scalars().all()
@@ -218,7 +224,9 @@ async def pregenerate_briefings(
 
     async def _gen(player: Player) -> tuple[Player, str | None]:
         try:
-            text = await ai_service.generate_briefing(scenario, factions_by_id[player.role_id])
+            text = await ai_service.generate_briefing(
+                scenario, factions_by_id[player.role_id], game.language
+            )
             return player, text
         except Exception as e:  # noqa: BLE001
             logger.warning("Briefing pregen failed for %s: %s", player.role_id, e)

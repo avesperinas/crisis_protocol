@@ -57,7 +57,7 @@ async def list_user_games(session: AsyncSession, *, user_id: str) -> list[GameHi
 
     entries: list[GameHistoryEntry] = []
     for player, game in rows:
-        scenario = get_scenario(game.scenario_id)
+        scenario = get_scenario(game.scenario_id, game.language)
         faction = next((f for f in scenario.factions if f.id == player.role_id), None)
         if not faction:
             continue

@@ -28,7 +28,7 @@ class _PactAwareFakeAI:
             accept=True, reason="fake-accept"
         )
 
-    async def generate_briefing(self, scenario, faction) -> str:
+    async def generate_briefing(self, scenario, faction, language="es") -> str:
         self.calls.append(("briefing", {"role": faction.id}))
         return f"## La Situación\nBriefing for {faction.name}."
 

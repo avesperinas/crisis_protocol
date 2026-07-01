@@ -26,8 +26,8 @@ class _FakeAIService:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict]] = []
 
-    async def generate_briefing(self, scenario, faction) -> str:
-        self.calls.append(("briefing", {"role": faction.id}))
+    async def generate_briefing(self, scenario, faction, language="es") -> str:
+        self.calls.append(("briefing", {"role": faction.id, "language": language}))
         return f"## La Situación\nBriefing for {faction.name}."
 
     async def evaluate_turn(self, **kwargs) -> TurnEvaluation:

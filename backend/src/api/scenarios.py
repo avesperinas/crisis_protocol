@@ -8,8 +8,12 @@ router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
 
 
 @router.get("")
-async def list_all() -> list[dict]:
-    """Returns scenario summaries — enough for the lobby's role picker."""
+async def list_all(lang: str = "es") -> list[dict]:
+    """Returns scenario summaries — enough for the lobby's role picker.
+
+    `lang` previews the localized text in the requester's current UI language;
+    the game's actual language is only fixed when a game is created.
+    """
     return [
         {
             "id": s.id,
@@ -36,5 +40,5 @@ async def list_all() -> list[dict]:
                 for f in s.factions
             ],
         }
-        for s in list_scenarios()
+        for s in list_scenarios(lang)
     ]

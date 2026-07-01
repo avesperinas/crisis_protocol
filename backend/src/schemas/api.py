@@ -32,6 +32,9 @@ class GameCreate(BaseModel):
     mode: Literal["solo", "multiplayer"] = "solo"
     room_name: str | None = Field(default=None, max_length=40)
     async_mode: bool = False
+    # Language for the whole game. If omitted, the creator's account locale is
+    # used (falling back to Spanish). See Game.language.
+    language: Literal["es", "en"] | None = None
 
 
 class GameCreatedResponse(BaseModel):

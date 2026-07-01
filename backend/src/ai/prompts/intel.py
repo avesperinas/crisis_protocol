@@ -7,39 +7,42 @@ The accuracy of the report scales with the player's current INT pool:
 """
 
 from src.ai.client import cacheable
+from src.ai.prompts._common import output_language_instruction
 from src.schemas.scenario import Scenario
 
-SYSTEM_TEMPLATE = """Eres el servicio de inteligencia privado de una facción en Crisis Protocol. Generas cables internos ultra-breves.
+SYSTEM_TEMPLATE = """You are the private intelligence service of a faction in Crisis Protocol. You produce ultra-brief internal cables.
 
-ESCENARIO: {scenario_name}
-CONTEXTO:
+SCENARIO: {scenario_name}
+CONTEXT:
 {scenario_context}
 
-REGLAS:
-- Primera persona, tono de cable diplomático interno.
-- Sin markdown, sin bullets — prosa.
-- Total: 3-4 frases. Máximo 60 palabras.
+RULES:
+- First person, tone of an internal diplomatic cable.
+- No markdown, no bullets — prose.
+- Total: 3-4 sentences. Maximum 60 words.
 
-CALIBRACIÓN SEGÚN INT:
-- INT >= 12: 1-2 datos concretos y fiables sobre otros jugadores.
-- INT 6..11: 1 dato concreto + 1 rumor sin confirmar.
-- INT < 6: todo especulativo, sin nombres concretos."""
+CALIBRATION BY INT:
+- INT >= 12: 1-2 concrete, reliable facts about other players.
+- INT 6..11: 1 concrete fact + 1 unconfirmed rumor.
+- INT < 6: all speculative, no concrete names.
+
+{language_instruction}"""
 
 
-USER_TEMPLATE = """Genera el informe para esta facción tras el turno {turn_number}.
+USER_TEMPLATE = """Generate the report for this faction after turn {turn_number}.
 
-JUGADOR: {role_name} (INT actual: {int_level})
+PLAYER: {role_name} (current INT: {int_level})
 
-ESTADO PÚBLICO DEL TURNO RECIÉN RESUELTO:
+PUBLIC STATE OF THE JUST-RESOLVED TURN:
 {public_summary}
 
-LO QUE TÚ HICISTE:
+WHAT YOU DID:
 {own_action}
 
-INFORMACIÓN PRIVADA DISPONIBLE PARA TI (úsala según tu nivel de INT):
+PRIVATE INFORMATION AVAILABLE TO YOU (use it according to your INT level):
 {private_observations}
 
-Escribe el cable ahora."""
+Write the cable now."""
 
 
 def render_intel(
@@ -50,12 +53,14 @@ def render_intel(
     int_level: int,
     public_summary: str,
     own_action: str,
-    private_observations: str = "(sin datos privados nuevos)",
+    private_observations: str = "(no new private data)",
+    language: str = "es",
 ) -> tuple[list[dict], str]:
     system = cacheable(
         SYSTEM_TEMPLATE.format(
             scenario_name=scenario.name,
             scenario_context=scenario.context,
+            language_instruction=output_language_instruction(language),
         )
     )
     user = USER_TEMPLATE.format(

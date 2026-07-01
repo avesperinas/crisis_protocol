@@ -31,6 +31,11 @@ from src.schemas.scenario import Faction, Scenario
 logger = logging.getLogger("crisis.ai.service")
 
 
+def _fb(language: str, es: str, en: str) -> str:
+    """Pick a fallback string in the game's language (defaults to Spanish)."""
+    return en if language == "en" else es
+
+
 @dataclass(frozen=True)
 class TurnEvaluation:
     """Wraps the parsed evaluation plus a flag telling callers whether a
@@ -50,8 +55,10 @@ class AIService:
 
     # ----- Briefings -----
 
-    async def generate_briefing(self, scenario: Scenario, faction: Faction) -> str:
-        system, user = render_briefing(scenario, faction)
+    async def generate_briefing(
+        self, scenario: Scenario, faction: Faction, language: str = "es"
+    ) -> str:
+        system, user = render_briefing(scenario, faction, language)
         try:
             return await self.client.call(
                 model=self._model(Models.SONNET),
@@ -62,18 +69,29 @@ class AIService:
             )
         except APIError as e:
             logger.warning("Briefing generation failed for %s: %s. Using fallback.", faction.id, e)
-            return self._fallback_briefing(faction)
+            return self._fallback_briefing(faction, language)
 
-    def _fallback_briefing(self, faction: Faction) -> str:
+    def _fallback_briefing(self, faction: Faction, language: str = "es") -> str:
+        res = faction.starting_resources
+        if language == "en":
+            return (
+                f"## The Situation\n"
+                f"You lead the delegation of {faction.name} ({faction.tagline}).\n\n"
+                f"## Your Position\n{faction.description}\n\n"
+                f"## What You Know\n"
+                f"Your starting resources are: MIL {res.MIL}, DIP {res.DIP}, "
+                f"ECO {res.ECO}, INT {res.INT}.\n\n"
+                f"## What You Must Achieve\n{faction.public_objective.text}"
+            )
         return (
             f"## La Situación\n"
             f"Estás al frente de la delegación de {faction.name} ({faction.tagline}).\n\n"
             f"## Tu Posición\n{faction.description}\n\n"
             f"## Lo que Sabes\n"
-            f"Tus recursos iniciales son: MIL {faction.starting_resources.MIL}, "
-            f"DIP {faction.starting_resources.DIP}, "
-            f"ECO {faction.starting_resources.ECO}, "
-            f"INT {faction.starting_resources.INT}.\n\n"
+            f"Tus recursos iniciales son: MIL {res.MIL}, "
+            f"DIP {res.DIP}, "
+            f"ECO {res.ECO}, "
+            f"INT {res.INT}.\n\n"
             f"## Lo que Debes Lograr\n{faction.public_objective.text}"
         )
 
@@ -88,7 +106,7 @@ class AIService:
         tension_start: int,
         actions: list[dict],
         active_pacts: list[dict] | None = None,
-        previous_events: str = "(ninguno)",
+        previous_events: str = "(none)",
     ) -> TurnEvaluation:
         system, user = render_evaluation(
             scenario=scenario,
@@ -130,7 +148,7 @@ class AIService:
                     coherence_score=0.7,
                     posture_modifier=0.0,
                     decision_quality=5.0,
-                    decision_quality_reasoning="(fallback determinista)",
+                    decision_quality_reasoning="(deterministic fallback)",
                     effective_multiplier=1.0,
                 )
                 for a in actions
@@ -148,10 +166,11 @@ class AIService:
         tension_start: int,
         tension_end: int,
         resolved_summary: str,
-        pacts_summary: str = "(ninguno)",
-        new_pacts: str = "(ninguno)",
-        broken_pacts: str = "(ninguno)",
+        pacts_summary: str = "(none)",
+        new_pacts: str = "(none)",
+        broken_pacts: str = "(none)",
         threshold_note: str = "",
+        language: str = "es",
     ) -> str:
         system, user = render_narrative(
             scenario=scenario,
@@ -164,6 +183,7 @@ class AIService:
             new_pacts=new_pacts,
             broken_pacts=broken_pacts,
             threshold_note=threshold_note,
+            language=language,
         )
         try:
             return await self.client.call(
@@ -175,9 +195,12 @@ class AIService:
             )
         except APIError as e:
             logger.warning("Narrative failed (turn %d): %s. Using fallback.", turn_number, e)
-            return (
+            return _fb(
+                language,
                 f"El turno {turn_number} se resolvió. La tensión global pasó de "
-                f"{tension_start} a {tension_end}."
+                f"{tension_start} a {tension_end}.",
+                f"Turn {turn_number} was resolved. Global tension moved from "
+                f"{tension_start} to {tension_end}.",
             )
 
     # ----- Intel reports -----
@@ -191,7 +214,8 @@ class AIService:
         int_level: int,
         public_summary: str,
         own_action: str,
-        private_observations: str = "(sin datos privados nuevos)",
+        private_observations: str = "(no new private data)",
+        language: str = "es",
     ) -> str:
         system, user = render_intel(
             scenario=scenario,
@@ -201,6 +225,7 @@ class AIService:
             public_summary=public_summary,
             own_action=own_action,
             private_observations=private_observations,
+            language=language,
         )
         try:
             return await self.client.call(
@@ -212,7 +237,11 @@ class AIService:
             )
         except APIError as e:
             logger.warning("Intel failed for %s turn %d: %s.", role_name, turn_number, e)
-            return "Sin información nueva este turno."
+            return _fb(
+                language,
+                "Sin información nueva este turno.",
+                "No new information this turn.",
+            )
 
 
     # ----- Bot decisions -----
@@ -228,9 +257,10 @@ class AIService:
         tension: int,
         resources: dict[str, int],
         token_budget: int,
-        pacts_summary: str = "(ninguno)",
-        previous_narrative: str = "(es el primer turno)",
-        previous_intel: str = "(sin informe previo)",
+        pacts_summary: str = "(none)",
+        previous_narrative: str = "(first turn)",
+        previous_intel: str = "(no previous report)",
+        language: str = "es",
     ) -> BotDecisionResponse | None:
         """Returns a parsed BotDecisionResponse, or None on failure.
 
@@ -248,6 +278,7 @@ class AIService:
             pacts_summary=pacts_summary,
             previous_narrative=previous_narrative,
             previous_intel=previous_intel,
+            language=language,
         )
         try:
             raw = await self.client.call(
@@ -283,7 +314,8 @@ class AIService:
         max_turns: int,
         tension: int,
         resources: dict[str, int],
-        pacts_summary: str = "(ninguno)",
+        pacts_summary: str = "(none)",
+        language: str = "es",
     ) -> PactDecisionResponse:
         """Returns a parsed decision. If Claude fails or parsing breaks, returns a
         heuristic default: reject for offensive-leaning roles, otherwise accept.
@@ -302,6 +334,7 @@ class AIService:
             tension=tension,
             resources=resources,
             pacts_summary=pacts_summary,
+            language=language,
         )
         try:
             raw = await self.client.call(
@@ -334,7 +367,7 @@ class AIService:
             high_commitment_ok = tension < 70 and turn_progress >= 0.3
             return PactDecisionResponse(
                 accept=low_commitment or high_commitment_ok,
-                reason="(fallback determinista)",
+                reason=_fb(language, "(fallback determinista)", "(deterministic fallback)"),
             )
 
 
