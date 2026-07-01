@@ -1,85 +1,89 @@
 # Crisis Protocol
 
-Juego multijugador de negociación geopolítica en tiempo real. Cada jugador
-controla una facción durante una crisis internacional y compite —y coopera—
-por sus objetivos a través de directivas, pactos e información parcial. Las
-facciones sin jugador humano las controla un bot impulsado por Claude, que
-también genera el briefing, los informes de inteligencia y la narrativa de
-resolución de cada turno.
+A real-time multiplayer geopolitical negotiation game. Each player controls a
+faction during an international crisis and competes — and cooperates — for their
+objectives through directives, pacts and partial information. Factions without a
+human player are controlled by a Claude-powered bot, which also generates each
+turn's briefing, intelligence reports and resolution narrative.
+
+The whole experience is localized: each game runs in a single language (English
+or Spanish), chosen at creation, and every AI-generated, player-facing text is
+written in that language to stay immersive.
 
 ## Stack
 
 - **Backend** — Python 3.12, FastAPI, SQLAlchemy (SQLite + aiosqlite), WebSockets,
-  autenticación JWT y el SDK de [Anthropic](https://docs.anthropic.com) para la IA.
+  JWT auth, and the [Anthropic](https://docs.anthropic.com) SDK for the AI.
 - **Frontend** — React 19, TypeScript, Vite, Tailwind CSS, Zustand, React Router
-  e i18n (español / inglés).
-- **Infra** — Docker / Docker Compose para desarrollo y producción.
+  and i18n (Spanish / English).
+- **Infra** — Docker / Docker Compose for development and production.
 
-## Escenarios
+## Scenarios
 
-Incluye tres escenarios jugables, cada uno con sus facciones, objetivos y
-eventos: **Ártico 2031**, **Corinto** y **Crisis del petróleo**.
+Three playable scenarios ship with the game, each with its own factions,
+objectives and events: **Arctic Crisis (2031)**, **The Congress of Corinth
+(338 BCE)** and **The Oil Crisis (1973)**.
 
-## Requisitos
+## Requirements
 
-- [uv](https://docs.astral.sh/uv/) (gestor de dependencias de Python)
+- [uv](https://docs.astral.sh/uv/) (Python dependency manager)
 - Node.js 20+
-- Una `ANTHROPIC_API_KEY` para las funciones de IA
-- Opcional: Docker + Docker Compose
+- An `ANTHROPIC_API_KEY` for the AI features
+- Optional: Docker + Docker Compose
 
-## Configuración
+## Configuration
 
-Copia la plantilla de variables de entorno del backend y rellena tu clave:
+Copy the backend environment template and fill in your key:
 
 ```bash
 cp backend/.env.example backend/.env
-# edita backend/.env y define ANTHROPIC_API_KEY
+# edit backend/.env and set ANTHROPIC_API_KEY
 ```
 
-Consulta `backend/src/config.py` para la lista completa de variables soportadas
-y sus valores por defecto. **Nunca** se commitea el `.env` real (está en
-`.gitignore`); para producción usa `backend/.env.prod.example` como referencia.
+See `backend/src/config.py` for the full list of supported variables and their
+defaults. The real `.env` is **never** committed (it is in `.gitignore`); for
+production use `backend/.env.prod.example` as a reference.
 
-## Desarrollo
+## Development
 
-### Con Docker (recomendado, multiplataforma)
+### With Docker (recommended, cross-platform)
 
 ```bash
 docker compose up --build
 ```
 
-- Backend: http://localhost:8000 (docs en `/docs`)
+- Backend: http://localhost:8000 (docs at `/docs`)
 - Frontend: http://localhost:5173
 
-### Sin Docker
+### Without Docker
 
 ```bash
 make install        # uv sync (backend) + npm install (frontend)
-make dev            # arranca backend y frontend juntos
+make dev            # start backend and frontend together
 ```
 
-O por separado:
+Or separately:
 
 ```bash
-make dev-backend    # uvicorn en :8000
-make dev-frontend   # vite en :5173
+make dev-backend    # uvicorn on :8000
+make dev-frontend   # vite on :5173
 ```
 
 ## Tests
 
 ```bash
-make test           # pytest del backend
+make test           # backend pytest suite
 ```
 
-## Producción
+## Production
 
 ```bash
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-Recuerda generar un `JWT_SECRET_KEY` propio antes de desplegar (el valor por
-defecto es inseguro y solo sirve para desarrollo local).
+Remember to generate your own `JWT_SECRET_KEY` before deploying (the default is
+insecure and only meant for local development).
 
-## Licencia
+## License
 
 [Apache License 2.0](LICENSE).

@@ -1,10 +1,11 @@
 # CLAUDE.md
 
-## Seguridad — Secrets y variables de entorno
+## Security — Secrets and environment variables
 
-NUNCA leas, muestres, loguees ni hagas referencia al contenido de archivos de secrets:
+NEVER read, display, log or otherwise reference the contents of secret files:
 
 - `.env`, `.env.local`, `.env.production`, `.env.*`
-- Cualquier archivo que contenga claves API, tokens, contraseñas o credenciales
+- Any file containing API keys, tokens, passwords or credentials
 
-Si necesitas saber qué variables de entorno usa el proyecto, consulta únicamente `src/config.py` o equivalentes — nunca los archivos `.env` reales.
+If you need to know which environment variables the project uses, consult only
+`src/config.py` or equivalents — never the real `.env` files.
