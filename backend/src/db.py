@@ -39,6 +39,12 @@ async def _apply_migrations(conn) -> None:
             ),
             ("proposal_terms", "ALTER TABLE messages ADD COLUMN proposal_terms JSON"),
         ],
+        "players": [
+            (
+                "credibility",
+                "ALTER TABLE players ADD COLUMN credibility INTEGER NOT NULL DEFAULT 50",
+            ),
+        ],
     }
     for table, pending in migrations.items():
         result = await conn.execute(text(f"PRAGMA table_info({table})"))

@@ -78,6 +78,7 @@ class FactionView(BaseModel):
     name: str
     tagline: str
     public_objective: str
+    credibility: int = 50  # public trustworthiness 0–100
 
 
 class PactView(BaseModel):

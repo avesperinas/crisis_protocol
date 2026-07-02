@@ -5,9 +5,10 @@ Order:
   2. pairwise interactions (defense, counter-intel, sanction-vs-trade, mediation)
   3. per-action pact modifiers (alliance, non-aggression)
   4. per-action coherence multiplier (stub in Phase 2: defaults to 1.0)
-  5. per-turn trade pact flows
-  6. consolidate resource changes (clamp to ≥ 0)
-  7. tension delta + threshold detection
+  5. per-action credibility modifier on diplomatic actions (Phase C)
+  6. per-turn trade pact flows
+  7. consolidate resource changes (clamp to ≥ 0)
+  8. tension delta + threshold detection
 """
 
 from copy import deepcopy
@@ -19,6 +20,7 @@ from src.engine.tension import check_thresholds
 from src.engine.types import (
     ActionEffects,
     ActionInput,
+    ActionType,
     GameState,
     ResolvedAction,
     TurnResult,
@@ -36,6 +38,7 @@ def resolve_turn(actions: list[ActionInput], state: GameState) -> TurnResult:
 
     for i, action in enumerate(actions):
         _apply_coherence(final_effects[i], action)
+        _apply_credibility(final_effects[i], action, state, log)
 
     trade_flows, trade_log = apply_trade_flows(state)
     log.extend(trade_log)
@@ -75,6 +78,37 @@ def _apply_coherence(effects: ActionEffects, action: ActionInput) -> None:
         for domain in list(changes.keys()):
             changes[domain] = int(changes[domain] * mult)
     effects.tension_delta = int(effects.tension_delta * mult)
+
+
+def _apply_credibility(
+    effects: ActionEffects, action: ActionInput, state: GameState, log: list[str]
+) -> None:
+    """Diplomatic actions land according to the actor's track record: a faction
+    whose word has been kept negotiates at up to 130% effect; a known traitor
+    at 70%. Non-diplomatic actions are unaffected — armies don't care about
+    your reputation.
+    """
+    if action.action_type not in (
+        ActionType.DIPLOMATIC_PROPOSAL,
+        ActionType.DIPLOMATIC_MEDIATION,
+    ):
+        return
+    try:
+        credibility = state.get_player(action.player_id).credibility
+    except KeyError:
+        return
+    factor = 0.7 + 0.6 * (credibility / 100.0)
+    if abs(factor - 1.0) < 1e-9:
+        return
+    for role_id, changes in effects.resource_changes.items():
+        if role_id == action.player_id:
+            continue
+        for domain in list(changes.keys()):
+            changes[domain] = int(changes[domain] * factor)
+    effects.tension_delta = int(effects.tension_delta * factor)
+    log.append(
+        f"{action.player_id} diplomacy scaled by credibility {credibility} (x{factor:.2f})"
+    )
 
 
 def _consolidate(

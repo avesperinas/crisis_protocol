@@ -60,6 +60,7 @@ async def decide_with_claude_or_fallback(
     pacts_summary: str = "(none)",
     chronicle: str = "(first turn — no history yet)",
     messages_block: str = "(none)",
+    credibility_block: str = "(unknown)",
     previous_intel: str = "(no previous report)",
     language: str = "es",
 ) -> BotDecision:
@@ -89,6 +90,7 @@ async def decide_with_claude_or_fallback(
         pacts_summary=pacts_summary,
         chronicle=chronicle,
         messages_block=messages_block,
+        credibility_block=credibility_block,
         previous_intel=previous_intel,
         language=language,
     )

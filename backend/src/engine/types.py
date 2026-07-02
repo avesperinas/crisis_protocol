@@ -76,6 +76,9 @@ class PlayerState:
     id: str  # role_id
     resources: dict[str, int]  # MIL/DIP/ECO/INT pool
     is_ai: bool = True
+    # Public trustworthiness 0–100 (50 = neutral). Kept promises raise it,
+    # betrayals sink it; it scales how well diplomatic actions land.
+    credibility: int = 50
 
 
 @dataclass

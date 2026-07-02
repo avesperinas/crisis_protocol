@@ -134,6 +134,8 @@
     "acceptedToast": "Aceptado: {{reason}}",
     "rejectedToast": "Rechazado: {{reason}}",
     "pendingToast": "Propuesta enviada — pendiente de su respuesta.",
+    "credibilityLabel": "Credibilidad",
+    "credibilityHint": "Confianza pública (0–100). Cumplir promesas la sube; traicionarlas o romper pactos la hunde, y con ella la eficacia de tu diplomacia.",
     "noReason": "(sin motivo)",
     "yourActionTitle": "Tu acción",
     "submitBtn": "Enviar acción",

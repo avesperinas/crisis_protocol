@@ -80,6 +80,12 @@ NEGOTIATION CONTEXT (game history, active pacts, this turn's messages):
    - 0.5: low coherence or contradictory posture
    - 0.3: incoherent directive or obvious bluff
 
+4. promise_assessment — did this action honor or contradict the faction's EXPLICIT commitments?
+   - "kept": the action follows through on a concrete promise the faction made (in this turn's messages or in an active pact) when it had a real chance to defect. Routine behavior with no commitment at stake is NOT "kept".
+   - "broken": the action directly contradicts an explicit promise the faction made in messages, or violates an active pact (e.g. attacking a non-aggression partner).
+   - "none": no explicit commitment was at stake this turn. This is the common case — be conservative; vague friendly talk is not a promise.
+   "promise_note" is one short sentence naming the commitment (empty when "none"). The note may be quoted in the public narrative, so write it as an observable fact and never reveal secret pacts in it.
+
 IMPORTANT — BREVITY: "decision_quality_reasoning" is internal (not shown to the user). At most one short sentence per action. You evaluate several factions in the same response — do not go long on any of them, or you will run out of space for the last ones.
 
 RETURN JSON ONLY. No text outside the JSON. No markdown or code fences:
@@ -94,7 +100,9 @@ RETURN JSON ONLY. No text outside the JSON. No markdown or code fences:
       "posture_modifier": 0.10,
       "decision_quality": 7.0,
       "decision_quality_reasoning": "...",
-      "effective_multiplier": 1.05
+      "effective_multiplier": 1.05,
+      "promise_assessment": "none",
+      "promise_note": ""
     }}
   ]
 }}"""

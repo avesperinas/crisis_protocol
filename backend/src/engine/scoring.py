@@ -79,10 +79,18 @@ def _efficiency_component(role_id: str, history: GameHistory) -> float:
 
 def _capital_component(role_id: str, history: GameHistory) -> float:
     """+0.02 per active pact the player is in, -0.03 per pact broken by player,
-    +0.02 per successful mediation action (no failure log entry) by this player.
+    +0.02 per successful mediation action (no failure log entry) by this player,
+    ±0.02 for final credibility (kept promises pay off at scoring time).
     Clamped [0, 0.1].
     """
     score = 0.0
+
+    # Credibility above/below neutral (50) is worth up to ±0.02.
+    try:
+        credibility = history.state.get_player(role_id).credibility
+        score += (credibility - 50) / 50.0 * 0.02
+    except KeyError:
+        pass
     for pact in history.state.pacts:
         if role_id not in (pact.player_a_id, pact.player_b_id):
             continue

@@ -71,6 +71,8 @@ export interface FactionView {
   name: string
   tagline: string
   public_objective: string
+  /** Public trustworthiness 0–100 (50 = neutral). */
+  credibility: number
 }
 
 export interface PlayerView {

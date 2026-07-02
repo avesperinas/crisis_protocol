@@ -65,6 +65,9 @@ Budget this turn: {token_budget} tokens.
 Active pacts in the game:
 {pacts_block}
 
+Public credibility of each faction (0-100; who keeps their word):
+{credibility_block}
+
 GAME HISTORY (public record of previous turns):
 {chronicle}
 
@@ -90,6 +93,7 @@ def render_bot_decision(
     pacts_summary: str = "(none)",
     chronicle: str = "(first turn — no history yet)",
     messages_block: str = "(none)",
+    credibility_block: str = "(unknown)",
     previous_intel: str = "(no previous report)",
     language: str = "es",
 ) -> tuple[list[dict], str]:
@@ -117,6 +121,7 @@ def render_bot_decision(
         pacts_block=pacts_summary,
         chronicle=chronicle,
         messages_block=messages_block,
+        credibility_block=credibility_block,
         previous_intel=previous_intel,
     )
     return system, user

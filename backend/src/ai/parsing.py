@@ -39,11 +39,20 @@ class EvaluatedAction(BaseModel):
     decision_quality: float = Field(ge=0.0, le=10.0)
     decision_quality_reasoning: str = ""
     effective_multiplier: float = Field(ge=0.3, le=1.2, default=1.0)
+    # Phase C: did this action honor or contradict the player's explicit
+    # commitments (messages, pacts)? Anything unexpected degrades to "none".
+    promise_assessment: str = "none"  # kept | broken | none
+    promise_note: str = ""
 
     _clamp_coherence = field_validator("coherence_score", mode="before")(_clamp(0.0, 1.0))
     _clamp_posture = field_validator("posture_modifier", mode="before")(_clamp(-0.25, 0.20))
     _clamp_dq = field_validator("decision_quality", mode="before")(_clamp(0.0, 10.0))
     _clamp_mult = field_validator("effective_multiplier", mode="before")(_clamp(0.3, 1.2))
+
+    @field_validator("promise_assessment", mode="before")
+    @classmethod
+    def _sanitize_promise(cls, v):  # noqa: ANN001, ANN206
+        return v if v in ("kept", "broken", "none") else "none"
 
     def action_type_enum(self) -> ActionType:
         try:

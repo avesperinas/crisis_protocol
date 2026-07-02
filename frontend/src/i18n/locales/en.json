@@ -134,6 +134,8 @@
     "acceptedToast": "Accepted: {{reason}}",
     "rejectedToast": "Rejected: {{reason}}",
     "pendingToast": "Proposal sent — awaiting their response.",
+    "credibilityLabel": "Credibility",
+    "credibilityHint": "Public trust (0–100). Keeping promises raises it; betraying them or breaking pacts sinks it — and your diplomacy's effectiveness with it.",
     "noReason": "(no reason given)",
     "yourActionTitle": "Your action",
     "submitBtn": "Submit action",

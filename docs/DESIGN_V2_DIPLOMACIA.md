@@ -109,7 +109,7 @@ defensa redujo el ataque tebano*).
 |------|-----------|--------|
 | **A — Cimientos** | Crónica determinista + pasar mensajes/pactos/crónica a evaluación, narrativa y decisiones de bots. Sin UI nueva. | **Hecha** |
 | **B — Bots vivos** | Bots responden mensajes; propuestas de pacto bot→humano y humano↔humano. | **Hecha** |
-| **C — Consecuencias** | Credibilidad + detección de promesas + modificadores en motor y scoring. | Pendiente |
+| **C — Consecuencias** | Credibilidad + detección de promesas + modificadores en motor y scoring. | **Hecha** |
 | **D — Información** | Intel engine con filtraciones reales según INT. | Pendiente |
 | **E — Fachada** | Feed diplomático unificado y panel causa-efecto. | Pendiente |
 
@@ -171,3 +171,35 @@ Pactos v2 (`pact_service.py`):
 Frontend: botones aceptar/rechazar sobre propuestas pendientes en el panel de
 mensajes, toast de "propuesta pendiente", `respondToProposal` en el cliente
 API y difusión WS que refresca el estado al llegar mensajes de bots.
+
+### Detalle de la Fase C
+
+**Credibilidad** (`Player.credibility`, 0–100, empieza en 50; migración
+SQLite). Es conocimiento público: viaja en `FactionView.credibility` y se
+muestra con una barra en el modal de facciones.
+
+**Detección de promesas.** La evaluación devuelve por acción
+`promise_assessment` (`kept` / `broken` / `none`, con validador tolerante) y
+`promise_note`. Instrucción conservadora: charla amistosa no es promesa;
+solo compromisos explícitos en mensajes o pactos activos. Deltas en
+`turn_service`: +5 por cumplir, −12 por romper (la confianza se gana despacio
+y se pierde rápido). Romper un pacto explícitamente cuesta además −10
+(`break_pact`).
+
+**Efectos mecánicos:**
+
+- El resolver escala las acciones diplomáticas (`diplomatic_proposal`,
+  `diplomatic_mediation`) por `0.7 + 0.6 × credibilidad/100` (70%–130%);
+  las acciones militares y las ganancias propias no se tocan — a los
+  ejércitos no les importa tu reputación.
+- El componente "capital diplomático" del scoring incorpora ±0.02 por
+  credibilidad final.
+- Los bots ven la credibilidad de todas las facciones al decidir acción y
+  movimiento diplomático, y `decide_pact_response` recibe la credibilidad
+  del proponente ("su palabra ya se ha roto antes").
+- Las promesas rotas/cumplidas entran en el resumen que fundamenta la
+  narrativa: el narrador puede (y debe) dramatizar la traición.
+
+La causalidad es correcta: el turno se resuelve con la credibilidad con la
+que los jugadores entraron; el veredicto de promesas mueve la credibilidad
+que regirá la diplomacia del turno siguiente.

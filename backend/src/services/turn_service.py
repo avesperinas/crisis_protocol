@@ -24,6 +24,7 @@ from src.scenarios import get_scenario
 from src.services.ai_service import AIService
 from src.services.chronicle import (
     build_chronicle,
+    credibility_summary,
     format_message_lines,
     load_turn_messages,
     pact_events_for_narrative,
@@ -34,6 +35,11 @@ from src.services.chronicle import (
 from src.services.state_loader import load_game_state
 
 logger = logging.getLogger("crisis.turn")
+
+# Phase C: how much a kept/broken promise moves public credibility (0–100).
+# Breaking hurts far more than keeping helps — trust is slow to build.
+_CREDIBILITY_KEPT_DELTA = 5
+_CREDIBILITY_BROKEN_DELTA = 12
 
 
 def _intel_unavailable(language: str) -> str:
@@ -214,7 +220,24 @@ async def _resolve_turn_full(
                 "action_type": ev.action_type,
                 "target_id": ev.target_id,
                 "reasoning": ev.decision_quality_reasoning,
+                "promise_assessment": ev.promise_assessment,
+                "promise_note": ev.promise_note,
             }
+
+    # Phase C: kept/broken promises move public credibility. The new value
+    # takes effect from the NEXT turn's diplomacy onward (this turn resolved
+    # with the credibility the players had walking in).
+    for role, ev in evals_by_role.items():
+        player = players_by_role.get(role)
+        if not player:
+            continue
+        if ev.promise_assessment == "kept":
+            player.credibility = min(100, player.credibility + _CREDIBILITY_KEPT_DELTA)
+        elif ev.promise_assessment == "broken":
+            player.credibility = max(0, player.credibility - _CREDIBILITY_BROKEN_DELTA)
+            logger.info(
+                "Credibility hit for %s (broken promise): now %d", role, player.credibility
+            )
 
     for role, new_resources in result.final_player_resources.items():
         player = players_by_role.get(role)
@@ -225,7 +248,7 @@ async def _resolve_turn_full(
     turn.status = TurnStatus.FINISHED.value
     game.tension = result.final_tension
 
-    resolved_summary = _summarise_resolved_actions(result, scenario)
+    resolved_summary = _summarise_resolved_actions(result, evals_by_role)
     # The narrative is public: secret pacts must not reach the narrator.
     public_active_pacts = [p for p in state.pacts if p.is_active and not p.is_secret]
     pacts_summary = (
@@ -427,6 +450,7 @@ async def _collect_bot_decisions(
     )
     turn_messages = await load_turn_messages(session, turn_id=current_turn.id)
     active_pacts = await _load_active_pacts(session, game.id)
+    credibility_block = credibility_summary(players_by_role)
 
     async def _decide(role: str, player: Player) -> BotDecision:
         faction = factions_by_id[role]
@@ -447,6 +471,7 @@ async def _collect_bot_decisions(
             pacts_summary=pacts_summary,
             chronicle=chronicle,
             messages_block=messages_block,
+            credibility_block=credibility_block,
             previous_intel=intel_by_role.get(role, "(no previous report)"),
             language=game.language,
         )
@@ -560,7 +585,7 @@ def _persist_action(
     return action
 
 
-def _summarise_resolved_actions(result, scenario) -> str:
+def _summarise_resolved_actions(result, evals_by_role: dict | None = None) -> str:
     chunks: list[str] = []
     for ra in result.resolved_actions:
         a = ra.action
@@ -569,6 +594,11 @@ def _summarise_resolved_actions(result, scenario) -> str:
             + (f" | target={a.target_id}" if a.target_id else "")
             + f"\n  directive: {a.directive}"
         )
+        ev = (evals_by_role or {}).get(a.player_id)
+        if ev is not None and ev.promise_assessment != "none":
+            # Feeds the public narrative: a kept word or a betrayal is a fact
+            # the narrator may (and should) dramatize.
+            line += f"\n  promise {ev.promise_assessment.upper()}: {ev.promise_note}"
         effects = ra.final_effects
         resource_changes = {
             role: {k: v for k, v in changes.items() if v != 0}

@@ -159,6 +159,7 @@ async def propose_pact(
         tension=game.tension,
         resources=dict(target.resources),
         pacts_summary=pacts_summary,
+        proposer_credibility=proposer.credibility,
         chronicle=chronicle,
         thread_block=thread_block,
         language=game.language,
@@ -272,7 +273,9 @@ async def break_pact(
     breaker_role_id: str,
     pact_id: str,
 ) -> Pact:
-    """Mark a pact as broken. Costs 1 DIP from the breaker's pool, +7 tension."""
+    """Mark a pact as broken. Costs 1 DIP from the breaker's pool, +7 tension
+    and -10 credibility — breaking your signed word is the canonical betrayal.
+    """
     game, players_by_role = await _load_basics(session, game_id)
     if breaker_role_id not in players_by_role:
         raise PactServiceError(f"unknown role {breaker_role_id!r}")
@@ -296,6 +299,7 @@ async def break_pact(
     breaker_resources["DIP"] = max(0, breaker_resources.get("DIP", 0) - 1)
     breaker.resources = breaker_resources
     game.tension = min(100, game.tension + 7)
+    breaker.credibility = max(0, breaker.credibility - 10)
 
     await session.commit()
     return pact

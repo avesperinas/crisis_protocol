@@ -40,6 +40,7 @@ RETURN JSON ONLY. No text outside, no code fences.
 USER_TEMPLATE = """Proposal received on turn {turn_number} of {max_turns}.
 
 Proposer: {proposer_name} ({proposer_id})
+Proposer's public credibility: {proposer_credibility}/100 (50 = neutral; low means they have broken their word)
 Pact type: {pact_type}
 Secret pact: {is_secret}
 Terms: {terms}
@@ -73,6 +74,7 @@ def render_pact_response(
     tension: int,
     resources: dict[str, int],
     pacts_summary: str,
+    proposer_credibility: int = 50,
     chronicle: str = "(first turn — no history yet)",
     thread_block: str = "(no messages exchanged)",
     language: str = "es",
@@ -93,6 +95,7 @@ def render_pact_response(
         max_turns=max_turns,
         proposer_id=proposer_role_id,
         proposer_name=proposer_name,
+        proposer_credibility=proposer_credibility,
         pact_type=pact_type,
         is_secret="yes" if is_secret else "no",
         terms=terms_text,

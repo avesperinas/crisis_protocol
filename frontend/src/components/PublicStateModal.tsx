@@ -55,6 +55,24 @@ export function PublicStateModal({ factions, scenarioId, yourRoleId, onClose }: 
                   )}
                   <span className="text-neutral-500 text-sm truncate">— {f.tagline}</span>
                 </div>
+                <div className="mt-2 ml-1 flex items-center gap-2" title={t('gameRoom.credibilityHint')}>
+                  <span className="label">{t('gameRoom.credibilityLabel')}</span>
+                  <div className="flex-1 h-1.5 rounded bg-neutral-200 overflow-hidden max-w-[10rem]">
+                    <div
+                      className={`h-full ${
+                        f.credibility >= 60
+                          ? 'bg-green-500'
+                          : f.credibility >= 40
+                            ? 'bg-yellow-500'
+                            : 'bg-red-500'
+                      }`}
+                      style={{ width: `${f.credibility}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-mono tabular-nums text-neutral-600">
+                    {f.credibility}
+                  </span>
+                </div>
                 <div className="mt-2 ml-1">
                   <div className="label text-indigo-700 mb-0.5">
                     {t('gameRoom.publicObjective')}

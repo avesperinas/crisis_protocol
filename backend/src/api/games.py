@@ -246,12 +246,14 @@ async def get_game_state(
         public_objective_text=faction_by_id[you.role_id].public_objective.text,
         hidden_objective_text=faction_by_id[you.role_id].hidden_objective.text,
     )
+    credibility_by_role = {p.role_id: p.credibility for p in players}
     factions_view = [
         FactionView(
             id=f.id,
             name=f.name,
             tagline=f.tagline,
             public_objective=f.public_objective.text,
+            credibility=credibility_by_role.get(f.id, 50),
         )
         for f in scenario.factions
     ]

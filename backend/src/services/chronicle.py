@@ -146,6 +146,15 @@ def public_only(messages: list[Message]) -> list[Message]:
     return [m for m in messages if m.to_player_id is None]
 
 
+def credibility_summary(players_by_role) -> str:
+    """Public credibility of every faction, e.g. "atenas: 62, macedonia: 38".
+    Credibility is public knowledge — everyone sees who keeps their word.
+    """
+    return ", ".join(
+        f"{role}: {p.credibility}" for role, p in sorted(players_by_role.items())
+    )
+
+
 def pacts_summary_for_viewer(pacts, role_by_uuid: dict[str, str], viewer_uuid: str) -> str:
     """Active pacts as seen by one player: public ones plus secret ones they
     are a party to. `pacts` are ORM Pact rows (player ids are UUIDs).

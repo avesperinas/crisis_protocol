@@ -22,6 +22,7 @@ from src.scenarios import get_scenario
 from src.services.ai_service import AIService
 from src.services.chronicle import (
     build_chronicle,
+    credibility_summary,
     format_message_lines,
     load_turn_messages,
     pacts_summary_for_viewer,
@@ -198,6 +199,7 @@ async def run_bot_diplomacy_for_game(
     )
     prev_messages = await _previous_turn_messages(session, game_id, turn_number)
     intel_by_role = await _previous_intel(session, game_id, turn_number, role_by_uuid)
+    credibility_block = credibility_summary(players_by_role)
 
     moves = 0
     for role, player in players_by_role.items():
@@ -222,6 +224,7 @@ async def run_bot_diplomacy_for_game(
             messages_block=format_message_lines(
                 visible_to(prev_messages, player.id), role_by_uuid
             ),
+            credibility_block=credibility_block,
             previous_intel=intel_by_role.get(role, "(no previous report)"),
             language=game.language,
         )

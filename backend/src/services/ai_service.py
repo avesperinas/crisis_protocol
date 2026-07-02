@@ -270,6 +270,7 @@ class AIService:
         pacts_summary: str = "(none)",
         chronicle: str = "(first turn — no history yet)",
         messages_block: str = "(none)",
+        credibility_block: str = "(unknown)",
         previous_intel: str = "(no previous report)",
         language: str = "es",
     ) -> BotDecisionResponse | None:
@@ -289,6 +290,7 @@ class AIService:
             pacts_summary=pacts_summary,
             chronicle=chronicle,
             messages_block=messages_block,
+            credibility_block=credibility_block,
             previous_intel=previous_intel,
             language=language,
         )
@@ -376,6 +378,7 @@ class AIService:
         pacts_summary: str = "(none)",
         chronicle: str = "(first turn — no history yet)",
         messages_block: str = "(none)",
+        credibility_block: str = "(unknown)",
         previous_intel: str = "(no previous report)",
         language: str = "es",
     ) -> BotDiplomacyResponse | None:
@@ -394,6 +397,7 @@ class AIService:
             pacts_summary=pacts_summary,
             chronicle=chronicle,
             messages_block=messages_block,
+            credibility_block=credibility_block,
             previous_intel=previous_intel,
             language=language,
         )
@@ -431,6 +435,7 @@ class AIService:
         tension: int,
         resources: dict[str, int],
         pacts_summary: str = "(none)",
+        proposer_credibility: int = 50,
         chronicle: str = "(first turn — no history yet)",
         thread_block: str = "(no messages exchanged)",
         language: str = "es",
@@ -452,6 +457,7 @@ class AIService:
             tension=tension,
             resources=resources,
             pacts_summary=pacts_summary,
+            proposer_credibility=proposer_credibility,
             chronicle=chronicle,
             thread_block=thread_block,
             language=language,

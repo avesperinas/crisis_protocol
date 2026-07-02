@@ -30,7 +30,13 @@ async def load_game_state(session: AsyncSession, game_id: str) -> GameState:
     )
 
     player_states = [
-        PlayerState(id=p.role_id, resources=dict(p.resources), is_ai=p.is_ai) for p in players
+        PlayerState(
+            id=p.role_id,
+            resources=dict(p.resources),
+            is_ai=p.is_ai,
+            credibility=p.credibility,
+        )
+        for p in players
     ]
     pact_states = [
         PactState(

@@ -51,6 +51,9 @@ Your resources: MIL {mil} · DIP {dip} · ECO {eco} · INT {int_}
 Active pacts you know of:
 {pacts_block}
 
+Public credibility of each faction (0-100; who keeps their word):
+{credibility_block}
+
 GAME HISTORY (public record of previous turns):
 {chronicle}
 
@@ -78,6 +81,7 @@ def render_bot_diplomacy(
     pacts_summary: str = "(none)",
     chronicle: str = "(first turn — no history yet)",
     messages_block: str = "(none)",
+    credibility_block: str = "(unknown)",
     previous_intel: str = "(no previous report)",
     language: str = "es",
 ) -> tuple[list[dict], str]:
@@ -102,6 +106,7 @@ def render_bot_diplomacy(
         pacts_block=pacts_summary,
         chronicle=chronicle,
         messages_block=messages_block,
+        credibility_block=credibility_block,
         previous_intel=previous_intel,
         factions_list=factions_list,
     )
