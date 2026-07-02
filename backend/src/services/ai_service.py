@@ -107,6 +107,7 @@ class AIService:
         actions: list[dict],
         active_pacts: list[dict] | None = None,
         previous_events: str = "(none)",
+        messages_block: str = "(none)",
     ) -> TurnEvaluation:
         system, user = render_evaluation(
             scenario=scenario,
@@ -116,6 +117,7 @@ class AIService:
             actions=actions,
             active_pacts=active_pacts,
             previous_events=previous_events,
+            messages_block=messages_block,
         )
         try:
             raw = await self.client.call(
@@ -170,6 +172,8 @@ class AIService:
         new_pacts: str = "(none)",
         broken_pacts: str = "(none)",
         threshold_note: str = "",
+        chronicle: str = "(first turn)",
+        public_messages: str = "(none)",
         language: str = "es",
     ) -> str:
         system, user = render_narrative(
@@ -183,6 +187,8 @@ class AIService:
             new_pacts=new_pacts,
             broken_pacts=broken_pacts,
             threshold_note=threshold_note,
+            chronicle=chronicle,
+            public_messages=public_messages,
             language=language,
         )
         try:
@@ -258,7 +264,8 @@ class AIService:
         resources: dict[str, int],
         token_budget: int,
         pacts_summary: str = "(none)",
-        previous_narrative: str = "(first turn)",
+        chronicle: str = "(first turn — no history yet)",
+        messages_block: str = "(none)",
         previous_intel: str = "(no previous report)",
         language: str = "es",
     ) -> BotDecisionResponse | None:
@@ -276,7 +283,8 @@ class AIService:
             resources=resources,
             token_budget=token_budget,
             pacts_summary=pacts_summary,
-            previous_narrative=previous_narrative,
+            chronicle=chronicle,
+            messages_block=messages_block,
             previous_intel=previous_intel,
             language=language,
         )

@@ -22,18 +22,26 @@ ABSOLUTE RULES:
    - 60-85: alarm, visible risk.
    - >85: open crisis.
    If TENSION is low, do NOT use language of "crisis", "critical levels" or "polarization" even if there were isolated confrontational postures — those postures are already reflected in the summary; do not dramatize them beyond the actual number.
-7. Total: 1 paragraph. Maximum 100 words.
+7. CONTINUITY — the GAME HISTORY block is the public record of previous turns. Use it to give the story continuity (ongoing conflicts, pacts honored or strained, reversals of course), but every NEW fact you narrate must still come from THIS turn's summary.
+8. PUBLIC STATEMENTS — messages on the public channel are on the record; you may weave them in as declarations made openly. Never reveal or allude to private communications.
+9. Total: 1 paragraph. Maximum 100 words.
 
 {language_instruction}"""
 
 
 USER_TEMPLATE = """Turn {turn_number} of {max_turns}.
 
+GAME HISTORY (public record of previous turns — for continuity only):
+{chronicle}
+
 TENSION: {tension_start} → {tension_end}
 ACTIVE PACTS: {pacts_summary}
 NEW PACTS: {new_pacts}
 BROKEN PACTS: {broken_pacts}
 {threshold_note}
+
+PUBLIC STATEMENTS THIS TURN (open channel, on the record):
+{public_messages}
 
 ACTUAL ACTIONS AND EFFECTS THIS TURN (narrate ONLY what appears here):
 {resolved_summary}
@@ -53,6 +61,8 @@ def render_narrative(
     new_pacts: str = "(none)",
     broken_pacts: str = "(none)",
     threshold_note: str = "",
+    chronicle: str = "(first turn)",
+    public_messages: str = "(none)",
     language: str = "es",
 ) -> tuple[list[dict], str]:
     system = cacheable(
@@ -72,5 +82,7 @@ def render_narrative(
         new_pacts=new_pacts,
         broken_pacts=broken_pacts,
         threshold_note=("\nNOTE: " + threshold_note) if threshold_note else "",
+        chronicle=chronicle,
+        public_messages=public_messages,
     )
     return system, user

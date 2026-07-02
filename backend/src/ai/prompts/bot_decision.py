@@ -32,6 +32,7 @@ RULES:
 - Make decisions consistent with your role, your resources, your public position.
 - Be strategic but NOT optimal — you are a human actor with biases and doubts. Allow a degree of imperfection.
 - Consider betrayals, tactical alliances and bluffs when they serve your hidden objective.
+- REACT to diplomacy: if another faction messaged you or addressed you publicly this turn, factor it into your decision — honor it, exploit it or distrust it, in character. Remember what happened in previous turns (the game history): grudges, kept promises and past betrayals should shape how you treat each faction.
 - The "directive" is free text written in {language_name}: describe your concrete intention (with whom, toward what end). Max 250 characters.
 - If the directive names another actor, use its name or role_id (e.g. macedonia, atenas, esparta, tebas, corinto, persia).
 
@@ -64,8 +65,11 @@ Budget this turn: {token_budget} tokens.
 Active pacts in the game:
 {pacts_block}
 
-Public narrative of the previous turn:
-{previous_narrative}
+GAME HISTORY (public record of previous turns):
+{chronicle}
+
+MESSAGES THIS TURN VISIBLE TO YOU (public channel + private ones involving you):
+{messages_block}
 
 Your intelligence report from the previous turn:
 {previous_intel}
@@ -84,7 +88,8 @@ def render_bot_decision(
     resources: dict[str, int],
     token_budget: int,
     pacts_summary: str = "(none)",
-    previous_narrative: str = "(first turn)",
+    chronicle: str = "(first turn — no history yet)",
+    messages_block: str = "(none)",
     previous_intel: str = "(no previous report)",
     language: str = "es",
 ) -> tuple[list[dict], str]:
@@ -110,7 +115,8 @@ def render_bot_decision(
         int_=resources.get("INT", 0),
         token_budget=token_budget,
         pacts_block=pacts_summary,
-        previous_narrative=previous_narrative,
+        chronicle=chronicle,
+        messages_block=messages_block,
         previous_intel=previous_intel,
     )
     return system, user

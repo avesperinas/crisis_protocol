@@ -69,6 +69,11 @@ SCORING RULES:
 
 2. decision_quality 0..10 against the role's rubric. Do not reward "winning"; reward "deciding well given what it knew".
 
+NEGOTIATION CONTEXT (game history, active pacts, this turn's messages):
+- A directive that follows through on what its faction negotiated this turn (messages) or previously committed to (pacts, prior turns) shows HIGH coherence — the tokens and the diplomacy point the same way.
+- A directive that contradicts an explicit promise made in messages, or violates an active pact, is a betrayal. Classify it accurately (e.g. military_offensive), do NOT lower coherence for treachery alone: a well-resourced, deliberate betrayal that serves the faction's hidden objective can score high decision_quality. Penalize decision_quality only when the contradiction looks like blind inconsistency rather than strategy.
+- Messages are cheap talk until backed by tokens: never raise coherence for words alone.
+
 3. effective_multiplier 0.3..1.2 — the final multiplier the engine applies to the effects:
    - 1.2: perfect coherence + aligned posture + excellent decision
    - 1.0: baseline, no bonus or penalty
@@ -100,8 +105,11 @@ USER_TEMPLATE = """Turn {turn_number} of {max_turns}. Global tension at start: {
 ACTIVE PACTS:
 {pacts_block}
 
-PREVIOUS EVENTS / NOTES:
+GAME HISTORY (public record of previous turns):
 {previous_events}
+
+MESSAGES SENT THIS TURN (as referee you see all channels; players only see what involves them):
+{messages_block}
 
 ACTIONS THIS TURN (player_id is each faction's role_id):
 
@@ -119,6 +127,7 @@ def render_evaluation(
     actions: list[dict],
     active_pacts: list[dict] | None = None,
     previous_events: str = "(none)",
+    messages_block: str = "(none)",
 ) -> tuple[list[dict], str]:
     """Return (system_blocks, user_message).
 
@@ -128,6 +137,8 @@ def render_evaluation(
          "directive": "..."}
 
     `active_pacts` shape: [{"a": "...", "b": "...", "type": "alliance", "is_secret": false}]
+    `previous_events` is the game chronicle (public record of past turns).
+    `messages_block` lists this turn's messages, public and private.
     """
     rubrics = "\n\n".join(
         f"- {f.id} ({f.name}): {f.evaluation_rubric}" for f in scenario.factions
@@ -164,6 +175,7 @@ def render_evaluation(
         tension_start=tension_start,
         pacts_block=pacts_block,
         previous_events=previous_events,
+        messages_block=messages_block,
         actions_block=actions_block,
     )
     return system, user

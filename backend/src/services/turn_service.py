@@ -22,6 +22,14 @@ from src.models import Action, Game, GameStatus, Player, Turn, TurnStatus
 from src.schemas.api import ActionSubmission, TokenAllocationDTO
 from src.scenarios import get_scenario
 from src.services.ai_service import AIService
+from src.services.chronicle import (
+    build_chronicle,
+    format_message_lines,
+    load_turn_messages,
+    pact_events_for_narrative,
+    public_only,
+    visible_to,
+)
 from src.services.state_loader import load_game_state
 
 logger = logging.getLogger("crisis.turn")
@@ -100,6 +108,7 @@ async def submit_human_action(
             game=game,
             current_turn=current_turn,
             bot_targets=bot_targets,
+            players_by_role=players_by_role,
         )
         for (_, player), decision in zip(bot_targets, bot_decisions, strict=True):
             _persist_action(session, current_turn.id, player.id, decision.submission)
@@ -134,18 +143,39 @@ async def _resolve_turn_full(
     turn.status = TurnStatus.RESOLVING.value
     await session.commit()
 
+    # Shared memory for the AI calls: public chronicle of past turns plus this
+    # turn's messages (the evaluator referees with full visibility; the
+    # narrative only ever sees the public channel).
+    chronicle = await build_chronicle(
+        session,
+        game_id=game_id,
+        up_to_turn_number=turn.turn_number,
+        role_by_uuid=role_by_uuid,
+    )
+    turn_messages = await load_turn_messages(session, turn_id=turn.id)
+    all_messages_block = format_message_lines(turn_messages, role_by_uuid)
+    public_messages_block = format_message_lines(public_only(turn_messages), role_by_uuid)
+
+    state = await load_game_state(session, game_id)
+    active_pacts = [
+        {"a": p.player_a_id, "b": p.player_b_id, "type": p.type, "is_secret": p.is_secret}
+        for p in state.pacts
+        if p.is_active
+    ]
+
     eval_result = await ai_service.evaluate_turn(
         scenario=scenario,
         turn_number=turn.turn_number,
         max_turns=scenario.max_turns,
         tension_start=turn.tension_at_start,
         actions=actions_block,
+        active_pacts=active_pacts,
+        previous_events=chronicle,
+        messages_block=all_messages_block,
     )
     evals_by_role: dict[str, EvaluatedAction] = {
         ev.player_id: ev for ev in eval_result.response.evaluations
     }
-
-    state = await load_game_state(session, game_id)
     action_inputs: list[ActionInput] = []
     for a in actions_result:
         role = role_by_uuid[a.player_id]
@@ -195,16 +225,16 @@ async def _resolve_turn_full(
     game.tension = result.final_tension
 
     resolved_summary = _summarise_resolved_actions(result, scenario)
-    pacts_active = state.pacts
+    # The narrative is public: secret pacts must not reach the narrator.
+    public_active_pacts = [p for p in state.pacts if p.is_active and not p.is_secret]
     pacts_summary = (
         "(none)"
-        if not pacts_active
+        if not public_active_pacts
         else "; ".join(
-            f"{p.player_a_id}<->{p.player_b_id} ({p.type})"
-            for p in pacts_active
-            if p.is_active
+            f"{p.player_a_id}<->{p.player_b_id} ({p.type})" for p in public_active_pacts
         )
     )
+    new_pacts, broken_pacts = pact_events_for_narrative(state.pacts, turn.turn_number)
     threshold_note = (
         ", ".join(t.value for t in result.threshold_events) if result.threshold_events else ""
     )
@@ -217,7 +247,11 @@ async def _resolve_turn_full(
         tension_end=result.final_tension,
         resolved_summary=resolved_summary,
         pacts_summary=pacts_summary,
+        new_pacts=new_pacts,
+        broken_pacts=broken_pacts,
         threshold_note=threshold_note,
+        chronicle=chronicle,
+        public_messages=public_messages_block,
         language=game.language,
     )
     turn.narrative = narrative
@@ -347,6 +381,7 @@ async def _auto_submit_timeout(game_id: str, turn_number: int, timeout_seconds: 
                     game=game,
                     current_turn=turn,
                     bot_targets=bot_targets,
+                    players_by_role=players_by_role,
                 )
                 for (_, p), decision in zip(bot_targets, bot_decisions, strict=True):
                     _persist_action(session, turn.id, p.id, decision.submission)
@@ -367,15 +402,30 @@ async def _collect_bot_decisions(
     game: Game,
     current_turn: Turn,
     bot_targets: list[tuple[str, Player]],
+    players_by_role: dict[str, Player],
 ) -> list[BotDecision]:
-    previous_narrative, intel_by_role = await _previous_turn_context(
+    intel_by_role = await _previous_intel_by_role(
         session, game.id, current_turn.turn_number
     )
-    pacts_summary = await _pacts_summary(session, game.id)
     factions_by_id = {f.id: f for f in scenario.factions}
+
+    role_by_uuid = {p.id: p.role_id for p in players_by_role.values()}
+    chronicle = await build_chronicle(
+        session,
+        game_id=game.id,
+        up_to_turn_number=current_turn.turn_number,
+        role_by_uuid=role_by_uuid,
+    )
+    turn_messages = await load_turn_messages(session, turn_id=current_turn.id)
+    active_pacts = await _load_active_pacts(session, game.id)
 
     async def _decide(role: str, player: Player) -> BotDecision:
         faction = factions_by_id[role]
+        messages_block = format_message_lines(
+            visible_to(turn_messages, player.id), role_by_uuid
+        )
+        # A bot sees public pacts plus the secret ones it is a party to.
+        pacts_summary = _pacts_summary_for_viewer(active_pacts, role_by_uuid, player.id)
         return await decide_with_claude_or_fallback(
             ai_service=ai_service,
             scenario=scenario,
@@ -386,7 +436,8 @@ async def _collect_bot_decisions(
             tension=game.tension,
             resources=dict(player.resources),
             pacts_summary=pacts_summary,
-            previous_narrative=previous_narrative,
+            chronicle=chronicle,
+            messages_block=messages_block,
             previous_intel=intel_by_role.get(role, "(no previous report)"),
             language=game.language,
         )
@@ -415,20 +466,22 @@ async def _collect_bot_decisions(
     return out
 
 
-async def _previous_turn_context(
+async def _previous_intel_by_role(
     session: AsyncSession, game_id: str, current_turn_number: int
-) -> tuple[str, dict[str, str]]:
+) -> dict[str, str]:
+    """Each faction's intel report from the previous turn. The public narrative
+    is no longer returned here — bots now receive the full chronicle instead.
+    """
     if current_turn_number <= 1:
-        return "(first turn)", {}
+        return {}
     prev_turn = (
         await session.execute(
             select(Turn).where(Turn.game_id == game_id, Turn.turn_number == current_turn_number - 1)
         )
     ).scalar_one_or_none()
     if not prev_turn:
-        return "(previous turn unavailable)", {}
+        return {}
 
-    previous_narrative = prev_turn.narrative or "(no narrative available)"
     actions = (
         (await session.execute(select(Action).where(Action.turn_id == prev_turn.id))).scalars().all()
     )
@@ -441,13 +494,13 @@ async def _previous_turn_context(
         role = role_by_uuid.get(a.player_id)
         if role and a.intel_report:
             intel_by_role[role] = a.intel_report
-    return previous_narrative, intel_by_role
+    return intel_by_role
 
 
-async def _pacts_summary(session: AsyncSession, game_id: str) -> str:
+async def _load_active_pacts(session: AsyncSession, game_id: str):
     from src.models import Pact
 
-    pacts = (
+    return (
         (
             await session.execute(
                 select(Pact).where(Pact.game_id == game_id, Pact.is_active == True)  # noqa: E712
@@ -456,15 +509,23 @@ async def _pacts_summary(session: AsyncSession, game_id: str) -> str:
         .scalars()
         .all()
     )
-    if not pacts:
+
+
+def _pacts_summary_for_viewer(pacts, role_by_uuid: dict[str, str], viewer_uuid: str) -> str:
+    """Active pacts as seen by one player: public ones plus secret ones they
+    are a party to.
+    """
+    visible = [
+        p
+        for p in pacts
+        if not p.is_secret or viewer_uuid in (p.player_a_id, p.player_b_id)
+    ]
+    if not visible:
         return "(none)"
-    players = (
-        (await session.execute(select(Player).where(Player.game_id == game_id))).scalars().all()
-    )
-    role_by_uuid = {p.id: p.role_id for p in players}
     return "; ".join(
         f"{role_by_uuid.get(p.player_a_id, '?')}<->{role_by_uuid.get(p.player_b_id, '?')} ({p.type})"
-        for p in pacts
+        + (" (secret)" if p.is_secret else "")
+        for p in visible
     )
 
 

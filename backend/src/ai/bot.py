@@ -58,7 +58,8 @@ async def decide_with_claude_or_fallback(
     tension: int,
     resources: dict[str, int],
     pacts_summary: str = "(none)",
-    previous_narrative: str = "(first turn)",
+    chronicle: str = "(first turn — no history yet)",
+    messages_block: str = "(none)",
     previous_intel: str = "(no previous report)",
     language: str = "es",
 ) -> BotDecision:
@@ -86,7 +87,8 @@ async def decide_with_claude_or_fallback(
         resources=resources,
         token_budget=token_budget,
         pacts_summary=pacts_summary,
-        previous_narrative=previous_narrative,
+        chronicle=chronicle,
+        messages_block=messages_block,
         previous_intel=previous_intel,
         language=language,
     )
