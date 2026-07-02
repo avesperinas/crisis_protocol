@@ -146,6 +146,24 @@ def public_only(messages: list[Message]) -> list[Message]:
     return [m for m in messages if m.to_player_id is None]
 
 
+def pacts_summary_for_viewer(pacts, role_by_uuid: dict[str, str], viewer_uuid: str) -> str:
+    """Active pacts as seen by one player: public ones plus secret ones they
+    are a party to. `pacts` are ORM Pact rows (player ids are UUIDs).
+    """
+    visible = [
+        p
+        for p in pacts
+        if not p.is_secret or viewer_uuid in (p.player_a_id, p.player_b_id)
+    ]
+    if not visible:
+        return "(none)"
+    return "; ".join(
+        f"{role_by_uuid.get(p.player_a_id, '?')}<->{role_by_uuid.get(p.player_b_id, '?')} ({p.type})"
+        + (" (secret)" if p.is_secret else "")
+        for p in visible
+    )
+
+
 def pact_events_for_narrative(
     pacts: list[PactState], turn_number: int
 ) -> tuple[str, str]:

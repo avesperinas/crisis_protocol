@@ -352,9 +352,11 @@ export function GameRoom() {
             onClose={() => setShowPactModal(false)}
             onDone={(res) => {
               setPactToast(
-                res.accepted
-                  ? t('gameRoom.acceptedToast', { reason: res.reason || t('gameRoom.noReason') })
-                  : t('gameRoom.rejectedToast', { reason: res.reason || t('gameRoom.noReason') }),
+                res.status === 'pending'
+                  ? t('gameRoom.pendingToast')
+                  : res.status === 'accepted'
+                    ? t('gameRoom.acceptedToast', { reason: res.reason || t('gameRoom.noReason') })
+                    : t('gameRoom.rejectedToast', { reason: res.reason || t('gameRoom.noReason') }),
               )
               refresh()
             }}

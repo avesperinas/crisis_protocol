@@ -70,6 +70,12 @@ async def create_game_endpoint(
     # In multiplayer mode: briefings are generated when the host calls /start.
     if payload.mode == "solo":
         await pregenerate_briefings(session, ai_service=ai_service, game_id=game.id)
+        from src.config import settings
+
+        if settings.bot_diplomacy_enabled:
+            from src.services.diplomacy_service import schedule_bot_diplomacy
+
+            schedule_bot_diplomacy(game.id, 1)
     return GameCreatedResponse(
         game_id=game.id,
         your_role_id=human.role_id,

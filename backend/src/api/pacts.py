@@ -6,11 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import get_ai_service, get_session
 from src.schemas.api import (
     PactBreakResult,
+    PactProposalRespond,
     PactProposalResult,
     PactProposalSubmit,
 )
 from src.services.ai_service import AIService
-from src.services.pact_service import PactServiceError, break_pact, propose_pact
+from src.services.pact_service import (
+    PactServiceError,
+    break_pact,
+    propose_pact,
+    respond_to_proposal,
+)
 
 router = APIRouter(prefix="/api/games", tags=["pacts"])
 
@@ -36,6 +42,37 @@ async def propose(
     except PactServiceError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     return PactProposalResult(
+        status=result.status,
+        accepted=result.accepted,
+        pact_id=result.pact_id,
+        proposal_message_id=result.proposal_message_id,
+        reason=result.reason,
+    )
+
+
+@router.post(
+    "/{game_id}/pacts/proposals/{message_id}/respond", response_model=PactProposalResult
+)
+async def respond(
+    game_id: str,
+    message_id: str,
+    role_id: str,
+    payload: PactProposalRespond,
+    session: AsyncSession = Depends(get_session),
+) -> PactProposalResult:
+    """A human recipient accepts or rejects a pending pact proposal."""
+    try:
+        result = await respond_to_proposal(
+            session,
+            game_id=game_id,
+            responder_role_id=role_id,
+            message_id=message_id,
+            accept=payload.accept,
+        )
+    except PactServiceError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return PactProposalResult(
+        status=result.status,
         accepted=result.accepted,
         pact_id=result.pact_id,
         proposal_message_id=result.proposal_message_id,

@@ -9,7 +9,7 @@ interface Props {
   factions: FactionView[]
   pactLabels: PactTypeLabels
   onClose: () => void
-  onDone: (result: { accepted: boolean; reason: string }) => void
+  onDone: (result: { status: 'accepted' | 'rejected' | 'pending'; reason: string }) => void
 }
 
 const PACT_TYPES: PactType[] = ['alliance', 'non_aggression', 'trade', 'intel_share']
@@ -29,7 +29,7 @@ export function PactProposalModal({ gameId, roleId, factions, pactLabels, onClos
     setError(null)
     try {
       const res = await api.proposePact(gameId, roleId, target, pactType, isSecret)
-      onDone({ accepted: res.accepted, reason: res.reason })
+      onDone({ status: res.status, reason: res.reason })
       onClose()
     } catch (e) {
       setError(String(e))

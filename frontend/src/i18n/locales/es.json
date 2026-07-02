@@ -129,10 +129,11 @@
     "previousTurnSummary": "Turno {{n}} — resumen",
     "declaredActions": "Acciones declaradas",
     "diplomacyTitle": "Diplomacia",
-    "diplomacyHint": "Propón un pacto a otra facción. La respuesta es inmediata.",
+    "diplomacyHint": "Propón un pacto a otra facción. Los bots responden al momento; los jugadores humanos deciden cuando lo vean.",
     "proposePactBtn": "Proponer pacto",
     "acceptedToast": "Aceptado: {{reason}}",
     "rejectedToast": "Rechazado: {{reason}}",
+    "pendingToast": "Propuesta enviada — pendiente de su respuesta.",
     "noReason": "(sin motivo)",
     "yourActionTitle": "Tu acción",
     "submitBtn": "Enviar acción",
@@ -209,7 +210,9 @@
       "proposalTag": "[propuesta {{type}}: {{status}}]",
       "publicPlaceholder": "Mensaje público…",
       "privatePlaceholder": "Mensaje privado a {{target}}…",
-      "sendBtn": "Enviar"
+      "sendBtn": "Enviar",
+      "acceptProposal": "Aceptar pacto",
+      "rejectProposal": "Rechazar"
     },
     "pactsActive": {
       "label": "Pactos activos",

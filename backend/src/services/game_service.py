@@ -201,6 +201,11 @@ async def start_game(
     from src.config import settings
     from src.services.turn_service import _auto_submit_timeout
 
+    if settings.bot_diplomacy_enabled:
+        from src.services.diplomacy_service import schedule_bot_diplomacy
+
+        schedule_bot_diplomacy(game_id, 1)
+
     timeout_seconds = (
         game.turn_timeout_seconds if game.turn_timeout_seconds is not None else settings.turn_timeout_seconds
     )

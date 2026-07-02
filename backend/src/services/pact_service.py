@@ -1,7 +1,9 @@
-"""Pact lifecycle: propose (human → bot), break (human).
+"""Pact lifecycle: propose, respond, break.
 
-Phase 6 keeps the surface small: only the human initiates. Bot decides via
-Claude synchronously when the human proposes. Pacts activate immediately on
+Anyone can propose to anyone (Phase B of v2). Proposals to a BOT are decided
+synchronously by Claude (with the game chronicle and the conversation with the
+proposer as context). Proposals to a HUMAN stay pending until the recipient
+responds through the respond endpoint. Pacts activate immediately on
 acceptance; breaking applies cost (−1 DIP) and bumps tension (+7) right away.
 """
 
@@ -12,13 +14,14 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models import Game, Message, Pact, Player
+from src.models import Game, GameStatus, Message, Pact, Player
 from src.scenarios import get_scenario
 from src.services.ai_service import AIService
 
 logger = logging.getLogger("crisis.pact")
 
 PactType = Literal["alliance", "non_aggression", "trade", "intel_share"]
+ProposalStatus = Literal["accepted", "rejected", "pending"]
 
 
 def _pact_reply_note(language: str, faction_name: str, *, accepted: bool, reason: str) -> str:
@@ -37,10 +40,14 @@ class PactServiceError(ValueError):
 
 @dataclass(frozen=True)
 class ProposalResult:
-    accepted: bool
+    status: ProposalStatus
     reason: str
     pact_id: str | None
     proposal_message_id: str
+
+    @property
+    def accepted(self) -> bool:
+        return self.status == "accepted"
 
 
 async def propose_pact(
@@ -54,9 +61,9 @@ async def propose_pact(
     is_secret: bool = False,
     custom_terms: dict | None = None,
 ) -> ProposalResult:
-    """Human proposes a pact to a bot. We synchronously ask the bot to decide.
-    On acceptance we create the Pact; on rejection we just persist a Message
-    with proposal_status='rejected'."""
+    """Propose a pact. Bot targets decide synchronously via Claude; human
+    targets get a pending proposal they resolve later via respond_to_proposal.
+    """
 
     if pact_type not in ("alliance", "non_aggression", "trade", "intel_share"):
         raise PactServiceError(f"unsupported pact type: {pact_type!r}")
@@ -68,15 +75,16 @@ async def propose_pact(
         raise PactServiceError("unknown role(s)")
     proposer = players_by_role[proposer_role_id]
     target = players_by_role[target_role_id]
-    if not target.is_ai:
-        raise PactServiceError("only bot-targeted proposals are supported in Phase 6")
 
-    # Reject duplicates: an active pact of any type between these two parties.
+    # Reject duplicates: an active pact of any type between these two parties,
+    # or a proposal still awaiting the recipient's answer.
     existing_active = await _active_pact_between(session, game_id, proposer.id, target.id)
     if existing_active:
         raise PactServiceError(
             f"there is already an active pact ({existing_active.type}) between these parties"
         )
+    if await _pending_proposal_between(session, game_id, proposer.id, target.id):
+        raise PactServiceError("there is already a pending proposal between these parties")
 
     terms = _build_terms(pact_type, custom_terms)
 
@@ -98,15 +106,44 @@ async def propose_pact(
         is_proposal=True,
         proposal_type=pact_type,
         proposal_status="pending",
+        proposal_is_secret=is_secret,
+        proposal_terms=terms,
     )
     session.add(proposal)
     await session.flush()
 
-    # Ask the bot.
+    if not target.is_ai:
+        # Human recipient: leave the proposal pending and notify them.
+        await session.commit()
+        from src.services.connection_manager import manager
+
+        await manager.broadcast(
+            game_id,
+            {"type": "pact_proposal", "to_role_id": target_role_id, "from_role_id": proposer_role_id},
+        )
+        return ProposalResult(
+            status="pending",
+            reason="",
+            pact_id=None,
+            proposal_message_id=proposal.id,
+        )
+
+    # Bot recipient: ask Claude synchronously, with history and conversation.
     scenario = get_scenario(game.scenario_id, game.language)
     target_faction = next(f for f in scenario.factions if f.id == target_role_id)
     proposer_faction = next(f for f in scenario.factions if f.id == proposer_role_id)
+    role_by_uuid = {p.id: p.role_id for p in players_by_role.values()}
     pacts_summary = await _summarise_active_pacts(session, game_id, players_by_role)
+
+    from src.services.chronicle import build_chronicle
+
+    chronicle = await build_chronicle(
+        session,
+        game_id=game_id,
+        up_to_turn_number=game.current_turn,
+        role_by_uuid=role_by_uuid,
+    )
+    thread_block = await _thread_between(session, game_id, proposer.id, target.id, role_by_uuid)
 
     decision = await ai_service.decide_pact_response(
         scenario=scenario,
@@ -122,49 +159,108 @@ async def propose_pact(
         tension=game.tension,
         resources=dict(target.resources),
         pacts_summary=pacts_summary,
+        chronicle=chronicle,
+        thread_block=thread_block,
         language=game.language,
     )
 
     if not decision.accept:
-        proposal.proposal_status = "rejected"
-        proposal.content = (
-            f"{proposal.content}\n\n"
-            + _pact_reply_note(
-                game.language, target_faction.name, accepted=False, reason=decision.reason
-            )
+        _finalize_proposal(
+            proposal, game.language, target_faction.name, accepted=False, reason=decision.reason
         )
         await session.commit()
         return ProposalResult(
-            accepted=False,
+            status="rejected",
             reason=decision.reason,
             pact_id=None,
             proposal_message_id=proposal.id,
         )
 
-    # Accepted: create the Pact, mark proposal accepted.
-    pact = Pact(
-        game_id=game_id,
-        type=pact_type,
-        player_a_id=proposer.id,
-        player_b_id=target.id,
-        is_secret=is_secret,
-        is_active=True,
-        created_turn=game.current_turn,
-        terms=terms,
-    )
-    session.add(pact)
-    proposal.proposal_status = "accepted"
-    proposal.content = (
-        f"{proposal.content}\n\n"
-        + _pact_reply_note(
-            game.language, target_faction.name, accepted=True, reason=decision.reason
-        )
+    pact = _create_pact_from_proposal(session, game, proposal, proposer, target)
+    _finalize_proposal(
+        proposal, game.language, target_faction.name, accepted=True, reason=decision.reason
     )
     await session.commit()
     return ProposalResult(
-        accepted=True,
+        status="accepted",
         reason=decision.reason,
         pact_id=pact.id,
+        proposal_message_id=proposal.id,
+    )
+
+
+async def respond_to_proposal(
+    session: AsyncSession,
+    *,
+    game_id: str,
+    responder_role_id: str,
+    message_id: str,
+    accept: bool,
+) -> ProposalResult:
+    """A human recipient accepts or rejects a pending pact proposal."""
+    game, players_by_role = await _load_basics(session, game_id)
+    if game.status != GameStatus.ACTIVE.value:
+        raise PactServiceError(f"game is not active (status={game.status})")
+    if responder_role_id not in players_by_role:
+        raise PactServiceError(f"unknown role {responder_role_id!r}")
+    responder = players_by_role[responder_role_id]
+
+    from src.models import Turn
+
+    proposal = (
+        await session.execute(
+            select(Message)
+            .join(Turn, Message.turn_id == Turn.id)
+            .where(Message.id == message_id, Turn.game_id == game_id)
+        )
+    ).scalar_one_or_none()
+    if not proposal or not proposal.is_proposal:
+        raise PactServiceError("proposal not found in this game")
+    if proposal.proposal_status != "pending":
+        raise PactServiceError(f"proposal is already {proposal.proposal_status}")
+    if proposal.to_player_id != responder.id:
+        raise PactServiceError("you are not the recipient of this proposal")
+
+    role_by_uuid = {p.id: p.role_id for p in players_by_role.values()}
+    proposer_role = role_by_uuid.get(proposal.from_player_id)
+    proposer = players_by_role.get(proposer_role) if proposer_role else None
+    if proposer is None:
+        raise PactServiceError("proposer no longer in game")
+
+    scenario = get_scenario(game.scenario_id, game.language)
+    responder_faction = next(f for f in scenario.factions if f.id == responder_role_id)
+
+    pact_id: str | None = None
+    if accept:
+        existing_active = await _active_pact_between(session, game_id, proposer.id, responder.id)
+        if existing_active:
+            raise PactServiceError(
+                f"there is already an active pact ({existing_active.type}) between these parties"
+            )
+        pact = _create_pact_from_proposal(session, game, proposal, proposer, responder)
+        await session.flush()
+        pact_id = pact.id
+
+    _finalize_proposal(
+        proposal, game.language, responder_faction.name, accepted=accept, reason=""
+    )
+    await session.commit()
+
+    from src.services.connection_manager import manager
+
+    await manager.broadcast(
+        game_id,
+        {
+            "type": "pact_proposal_resolved",
+            "accepted": accept,
+            "from_role_id": proposer_role,
+            "to_role_id": responder_role_id,
+        },
+    )
+    return ProposalResult(
+        status="accepted" if accept else "rejected",
+        reason="",
+        pact_id=pact_id,
         proposal_message_id=proposal.id,
     )
 
@@ -208,6 +304,71 @@ async def break_pact(
 # ---------- helpers ----------
 
 
+def _create_pact_from_proposal(
+    session: AsyncSession, game: Game, proposal: Message, proposer: Player, target: Player
+) -> Pact:
+    pact = Pact(
+        game_id=game.id,
+        type=proposal.proposal_type or "alliance",
+        player_a_id=proposer.id,
+        player_b_id=target.id,
+        is_secret=proposal.proposal_is_secret,
+        is_active=True,
+        created_turn=game.current_turn,
+        terms=proposal.proposal_terms,
+    )
+    session.add(pact)
+    return pact
+
+
+def _finalize_proposal(
+    proposal: Message, language: str, responder_name: str, *, accepted: bool, reason: str
+) -> None:
+    proposal.proposal_status = "accepted" if accepted else "rejected"
+    proposal.content = (
+        f"{proposal.content}\n\n"
+        + _pact_reply_note(language, responder_name, accepted=accepted, reason=reason)
+    )
+
+
+async def _thread_between(
+    session: AsyncSession,
+    game_id: str,
+    a_uuid: str,
+    b_uuid: str,
+    role_by_uuid: dict[str, str],
+) -> str:
+    """The bilateral private conversation between two players over the whole
+    game, formatted for a prompt.
+    """
+    from sqlalchemy import and_, or_
+
+    from src.models import Turn
+    from src.services.chronicle import format_message_lines
+
+    messages = (
+        (
+            await session.execute(
+                select(Message)
+                .join(Turn, Message.turn_id == Turn.id)
+                .where(
+                    Turn.game_id == game_id,
+                    or_(
+                        and_(Message.from_player_id == a_uuid, Message.to_player_id == b_uuid),
+                        and_(Message.from_player_id == b_uuid, Message.to_player_id == a_uuid),
+                    ),
+                )
+                .order_by(Message.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not messages:
+        return "(no messages exchanged)"
+    return format_message_lines(list(messages), role_by_uuid)
+
+
 async def _load_basics(
     session: AsyncSession, game_id: str
 ) -> tuple[Game, dict[str, Player]]:
@@ -220,6 +381,32 @@ async def _load_basics(
         (await session.execute(select(Player).where(Player.game_id == game_id))).scalars().all()
     )
     return game, {p.role_id: p for p in players}
+
+
+async def _pending_proposal_between(
+    session: AsyncSession, game_id: str, a_id: str, b_id: str
+) -> bool:
+    from sqlalchemy import and_, or_
+
+    from src.models import Turn
+
+    pending = (
+        await session.execute(
+            select(Message.id)
+            .join(Turn, Message.turn_id == Turn.id)
+            .where(
+                Turn.game_id == game_id,
+                Message.is_proposal == True,  # noqa: E712
+                Message.proposal_status == "pending",
+                or_(
+                    and_(Message.from_player_id == a_id, Message.to_player_id == b_id),
+                    and_(Message.from_player_id == b_id, Message.to_player_id == a_id),
+                ),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return pending is not None
 
 
 async def _active_pact_between(

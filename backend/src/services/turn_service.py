@@ -27,6 +27,7 @@ from src.services.chronicle import (
     format_message_lines,
     load_turn_messages,
     pact_events_for_narrative,
+    pacts_summary_for_viewer,
     public_only,
     visible_to,
 )
@@ -298,10 +299,18 @@ async def _resolve_turn_full(
     from src.services.connection_manager import manager
     await manager.broadcast(game_id, {"type": "state_updated", "turn": game.current_turn})
 
-    # Schedule auto-submit timeout for the next turn if the game is still running.
-    # Per-game timeout (set at creation, e.g. async mode = 24h) overrides the global default.
     if not game_finished:
         from src.config import settings
+
+        # Bots get one optional diplomatic move at the start of the new turn
+        # (message or pact proposal), generated in the background.
+        if settings.bot_diplomacy_enabled:
+            from src.services.diplomacy_service import schedule_bot_diplomacy
+
+            schedule_bot_diplomacy(game_id, game.current_turn)
+
+        # Schedule auto-submit timeout for the next turn if the game is still running.
+        # Per-game timeout (set at creation, e.g. async mode = 24h) overrides the global default.
         timeout_seconds = (
             game.turn_timeout_seconds
             if game.turn_timeout_seconds is not None
@@ -425,7 +434,7 @@ async def _collect_bot_decisions(
             visible_to(turn_messages, player.id), role_by_uuid
         )
         # A bot sees public pacts plus the secret ones it is a party to.
-        pacts_summary = _pacts_summary_for_viewer(active_pacts, role_by_uuid, player.id)
+        pacts_summary = pacts_summary_for_viewer(active_pacts, role_by_uuid, player.id)
         return await decide_with_claude_or_fallback(
             ai_service=ai_service,
             scenario=scenario,
@@ -508,24 +517,6 @@ async def _load_active_pacts(session: AsyncSession, game_id: str):
         )
         .scalars()
         .all()
-    )
-
-
-def _pacts_summary_for_viewer(pacts, role_by_uuid: dict[str, str], viewer_uuid: str) -> str:
-    """Active pacts as seen by one player: public ones plus secret ones they
-    are a party to.
-    """
-    visible = [
-        p
-        for p in pacts
-        if not p.is_secret or viewer_uuid in (p.player_a_id, p.player_b_id)
-    ]
-    if not visible:
-        return "(none)"
-    return "; ".join(
-        f"{role_by_uuid.get(p.player_a_id, '?')}<->{role_by_uuid.get(p.player_b_id, '?')} ({p.type})"
-        + (" (secret)" if p.is_secret else "")
-        for p in visible
     )
 
 

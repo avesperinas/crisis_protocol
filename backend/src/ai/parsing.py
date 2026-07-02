@@ -207,14 +207,72 @@ def parse_bot_decision(text: str, expected_budget: int) -> BotDecisionResponse:
     raise ParseError(f"Could not parse bot decision: {last_err}")
 
 
+class BotDiplomacyResponse(BaseModel):
+    """A bot's optional diplomatic move at the start of a turn."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    action: str  # none | message_public | message_private | propose_pact
+    target_id: str | None = None
+    content: str = Field(default="", max_length=600)
+    pact_type: str | None = None
+    is_secret: bool = False
+    reasoning: str = ""
+
+
+_DIPLOMACY_ACTIONS = ("none", "message_public", "message_private", "propose_pact")
+_DIPLOMACY_PACT_TYPES = ("alliance", "non_aggression", "trade", "intel_share")
+
+
+def parse_bot_diplomacy(text: str) -> BotDiplomacyResponse:
+    """Parse and validate a bot diplomacy JSON. Raises ParseError if the shape
+    is invalid or the action's required fields are missing.
+    """
+    stripped = _strip_fences(text.strip())
+    candidates: list[str] = [stripped]
+    extracted = _extract_first_json_object(stripped)
+    if extracted and extracted != stripped:
+        candidates.append(extracted)
+
+    last_err: Exception | None = None
+    for cand in candidates:
+        try:
+            data = json.loads(cand)
+        except json.JSONDecodeError as e:
+            last_err = e
+            continue
+        try:
+            decision = BotDiplomacyResponse.model_validate(data)
+        except ValidationError as e:
+            last_err = e
+            continue
+        if decision.action not in _DIPLOMACY_ACTIONS:
+            last_err = ValueError(f"invalid diplomacy action: {decision.action!r}")
+            continue
+        if decision.action in ("message_public", "message_private") and not decision.content.strip():
+            last_err = ValueError("message action requires non-empty content")
+            continue
+        if decision.action in ("message_private", "propose_pact") and not decision.target_id:
+            last_err = ValueError(f"{decision.action} requires target_id")
+            continue
+        if decision.action == "propose_pact" and decision.pact_type not in _DIPLOMACY_PACT_TYPES:
+            last_err = ValueError(f"invalid pact_type: {decision.pact_type!r}")
+            continue
+        return decision
+
+    raise ParseError(f"Could not parse bot diplomacy: {last_err}")
+
+
 __all__ = [
     "BotDecisionResponse",
+    "BotDiplomacyResponse",
     "BotTokens",
     "EvaluatedAction",
     "EvaluationResponse",
     "PactDecisionResponse",
     "ParseError",
     "parse_bot_decision",
+    "parse_bot_diplomacy",
     "parse_evaluation_json",
     "parse_pact_decision",
 ]

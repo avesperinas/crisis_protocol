@@ -153,6 +153,7 @@ export interface GameStateView {
 }
 
 export interface PactProposalResult {
+  status: 'accepted' | 'rejected' | 'pending'
   accepted: boolean
   pact_id: string | null
   proposal_message_id: string

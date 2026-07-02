@@ -12,15 +12,19 @@ from anthropic import APIError
 from src.ai.client import ClaudeClient, Models
 from src.ai.parsing import (
     BotDecisionResponse,
+    BotDiplomacyResponse,
     EvaluatedAction,
     EvaluationResponse,
     PactDecisionResponse,
     ParseError,
     parse_bot_decision,
+    parse_bot_diplomacy,
     parse_evaluation_json,
     parse_pact_decision,
 )
 from src.ai.prompts.bot_decision import render_bot_decision
+from src.ai.prompts.bot_diplomacy import render_bot_diplomacy
+from src.ai.prompts.bot_message_reply import render_bot_message_reply
 from src.ai.prompts.briefing import render_briefing
 from src.ai.prompts.evaluation import render_evaluation
 from src.ai.prompts.intel import render_intel
@@ -305,7 +309,111 @@ class AIService:
             return None
 
 
-    # ----- Pact responses (bot accepts/rejects a human-initiated pact) -----
+    # ----- Bot message replies (in-character diplomacy) -----
+
+    async def reply_to_message(
+        self,
+        *,
+        scenario: Scenario,
+        faction: Faction,
+        briefing: str,
+        sender_id: str,
+        sender_name: str,
+        incoming: str,
+        turn_number: int,
+        max_turns: int,
+        tension: int,
+        pacts_summary: str = "(none)",
+        chronicle: str = "(first turn — no history yet)",
+        thread_block: str = "(no previous messages)",
+        language: str = "es",
+    ) -> str | None:
+        """In-character reply to a diplomatic message. Returns None on failure —
+        an unanswered message is better than a canned non-answer.
+        """
+        system, user = render_bot_message_reply(
+            scenario=scenario,
+            faction=faction,
+            briefing=briefing,
+            sender_id=sender_id,
+            sender_name=sender_name,
+            incoming=incoming,
+            turn_number=turn_number,
+            max_turns=max_turns,
+            tension=tension,
+            pacts_summary=pacts_summary,
+            chronicle=chronicle,
+            thread_block=thread_block,
+            language=language,
+        )
+        try:
+            reply = await self.client.call(
+                model=self._model(Models.HAIKU),
+                system=system,
+                user_message=user,
+                max_tokens=200,
+                temperature=0.8,
+            )
+        except APIError as e:
+            logger.warning("Message reply failed for %s: %s.", faction.id, e)
+            return None
+        reply = reply.strip()
+        return reply or None
+
+    # ----- Bot diplomacy (optional move at turn start) -----
+
+    async def decide_bot_diplomacy(
+        self,
+        *,
+        scenario: Scenario,
+        faction: Faction,
+        briefing: str,
+        turn_number: int,
+        max_turns: int,
+        tension: int,
+        resources: dict[str, int],
+        factions_list: str,
+        pacts_summary: str = "(none)",
+        chronicle: str = "(first turn — no history yet)",
+        messages_block: str = "(none)",
+        previous_intel: str = "(no previous report)",
+        language: str = "es",
+    ) -> BotDiplomacyResponse | None:
+        """One optional diplomatic move for a bot. Returns None on failure —
+        callers simply skip the move (equivalent to action='none').
+        """
+        system, user = render_bot_diplomacy(
+            scenario=scenario,
+            faction=faction,
+            briefing=briefing,
+            turn_number=turn_number,
+            max_turns=max_turns,
+            tension=tension,
+            resources=resources,
+            factions_list=factions_list,
+            pacts_summary=pacts_summary,
+            chronicle=chronicle,
+            messages_block=messages_block,
+            previous_intel=previous_intel,
+            language=language,
+        )
+        try:
+            raw = await self.client.call(
+                model=self._model(Models.HAIKU),
+                system=system,
+                user_message=user,
+                max_tokens=400,
+                temperature=0.7,
+                prefill='{"',
+            )
+            return parse_bot_diplomacy(raw)
+        except (APIError, ParseError) as e:
+            logger.warning(
+                "Bot diplomacy failed for %s on turn %d: %s.", faction.id, turn_number, e
+            )
+            return None
+
+    # ----- Pact responses (bot accepts/rejects an incoming pact proposal) -----
 
     async def decide_pact_response(
         self,
@@ -323,6 +431,8 @@ class AIService:
         tension: int,
         resources: dict[str, int],
         pacts_summary: str = "(none)",
+        chronicle: str = "(first turn — no history yet)",
+        thread_block: str = "(no messages exchanged)",
         language: str = "es",
     ) -> PactDecisionResponse:
         """Returns a parsed decision. If Claude fails or parsing breaks, returns a
@@ -342,6 +452,8 @@ class AIService:
             tension=tension,
             resources=resources,
             pacts_summary=pacts_summary,
+            chronicle=chronicle,
+            thread_block=thread_block,
             language=language,
         )
         try:

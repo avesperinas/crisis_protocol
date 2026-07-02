@@ -185,6 +185,12 @@ export const api = {
       },
     ),
 
+  respondToProposal: (gameId: string, roleId: string, messageId: string, accept: boolean) =>
+    request<PactProposalResult>(
+      `/api/games/${gameId}/pacts/proposals/${messageId}/respond?role_id=${encodeURIComponent(roleId)}`,
+      { method: 'POST', body: JSON.stringify({ accept }) },
+    ),
+
   breakPact: (gameId: string, roleId: string, pactId: string) =>
     request<PactBreakResult>(
       `/api/games/${gameId}/pacts/${pactId}/break?role_id=${encodeURIComponent(roleId)}`,

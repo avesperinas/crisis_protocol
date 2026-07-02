@@ -1,9 +1,9 @@
 import enum
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db import Base
@@ -33,6 +33,10 @@ class Message(Base):
     is_proposal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     proposal_type: Mapped[str | None] = mapped_column(String, nullable=True)
     proposal_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Pending proposals (human recipients decide later) need the full pact spec
+    # persisted so the pact can be created at acceptance time.
+    proposal_is_secret: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    proposal_terms: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )

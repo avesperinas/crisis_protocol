@@ -1,9 +1,12 @@
 """Message lifecycle.
 
-In Phase 6 the only sender is the human player. Visibility rules:
+Visibility rules:
 - to_player_id is null → public, all see it.
 - to_player_id set → only sender and recipient see it.
 - Proposal messages (is_proposal=True) follow the same rule.
+
+Since Phase B, a private message from a human to a bot triggers an
+in-character bot reply, generated in the background (diplomacy_service).
 """
 
 from sqlalchemy import or_, select
@@ -23,6 +26,7 @@ async def send_message(
     from_role_id: str,
     to_role_id: str | None,
     content: str,
+    trigger_bot_reply: bool = True,
 ) -> Message:
     if not content.strip():
         raise MessageServiceError("content must not be empty")
@@ -63,6 +67,25 @@ async def send_message(
     )
     session.add(message)
     await session.commit()
+
+    from src.services.connection_manager import manager
+
+    await manager.broadcast(
+        game_id,
+        {"type": "message_received", "from_role_id": from_role_id, "to_role_id": to_role_id},
+    )
+
+    # A human writing privately to a bot gets an in-character reply, generated
+    # in the background so the sender's request never blocks on Claude.
+    if (
+        trigger_bot_reply
+        and not sender.is_ai
+        and to_role_id is not None
+        and players_by_role[to_role_id].is_ai
+    ):
+        from src.services.diplomacy_service import schedule_bot_reply
+
+        schedule_bot_reply(game_id, message.id)
     return message
 
 

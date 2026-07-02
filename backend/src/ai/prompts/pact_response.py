@@ -26,6 +26,7 @@ RULES:
 - If your hidden objective would be compromised or exposed, reject.
 - If the proposer is a natural rival and the pact weakens you strategically, reject.
 - If the pact strengthens your position at no obvious cost, accept.
+- Weigh the proposer's track record (game history) and what they have said to you (conversation): a faction that kept its word deserves more trust; one that betrayed a pact or contradicted its promises deserves suspicion.
 
 RETURN JSON ONLY. No text outside, no code fences.
 
@@ -48,6 +49,12 @@ Current game state:
 - Your resources: MIL {mil} · DIP {dip} · ECO {eco} · INT {int_}
 - Active pacts: {pacts_summary}
 
+GAME HISTORY (public record of previous turns):
+{chronicle}
+
+YOUR CONVERSATION WITH THE PROPOSER THIS TURN:
+{thread_block}
+
 Do you accept? Respond with the JSON now."""
 
 
@@ -66,6 +73,8 @@ def render_pact_response(
     tension: int,
     resources: dict[str, int],
     pacts_summary: str,
+    chronicle: str = "(first turn — no history yet)",
+    thread_block: str = "(no messages exchanged)",
     language: str = "es",
 ) -> tuple[list[dict], str]:
     system = cacheable(
@@ -93,5 +102,7 @@ def render_pact_response(
         eco=resources.get("ECO", 0),
         int_=resources.get("INT", 0),
         pacts_summary=pacts_summary,
+        chronicle=chronicle,
+        thread_block=thread_block,
     )
     return system, user

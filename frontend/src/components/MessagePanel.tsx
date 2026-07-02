@@ -55,6 +55,19 @@ export function MessagePanel({ gameId, roleId, factions, messages, onSent, fill 
     }
   }
 
+  const respondProposal = async (messageId: string, accept: boolean) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await api.respondToProposal(gameId, roleId, messageId, accept)
+      onSent()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <Panel
       icon={<ChatIcon size={15} />}
@@ -105,6 +118,24 @@ export function MessagePanel({ gameId, roleId, factions, messages, onSent, fill 
                 )}
               </div>
               <div className="whitespace-pre-wrap">{m.content}</div>
+              {m.is_proposal && m.proposal_status === 'pending' && m.to_role_id === roleId && (
+                <div className="flex gap-2 mt-1">
+                  <button
+                    className="text-xs px-2 py-1 rounded border border-green-300 bg-green-50 text-green-800 hover:bg-green-100"
+                    disabled={busy}
+                    onClick={() => respondProposal(m.id, true)}
+                  >
+                    {t('components.messagePanel.acceptProposal')}
+                  </button>
+                  <button
+                    className="text-xs px-2 py-1 rounded border border-red-300 bg-red-50 text-red-800 hover:bg-red-100"
+                    disabled={busy}
+                    onClick={() => respondProposal(m.id, false)}
+                  >
+                    {t('components.messagePanel.rejectProposal')}
+                  </button>
+                </div>
+              )}
             </li>
           ))
         )}

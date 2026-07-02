@@ -24,15 +24,25 @@ async def init_db() -> None:
 
 async def _apply_migrations(conn) -> None:
     """Add columns introduced after initial schema (SQLite ALTER TABLE migration)."""
-    result = await conn.execute(text("PRAGMA table_info(games)"))
-    existing = {row[1] for row in result.fetchall()}
-    pending = [
-        ("mode",         "ALTER TABLE games ADD COLUMN mode TEXT NOT NULL DEFAULT 'solo'"),
-        ("join_code",    "ALTER TABLE games ADD COLUMN join_code TEXT"),
-        ("host_role_id", "ALTER TABLE games ADD COLUMN host_role_id TEXT"),
-        ("room_name",    "ALTER TABLE games ADD COLUMN room_name TEXT"),
-        ("turn_timeout_seconds", "ALTER TABLE games ADD COLUMN turn_timeout_seconds INTEGER"),
-    ]
-    for col, sql in pending:
-        if col not in existing:
-            await conn.execute(text(sql))
+    migrations = {
+        "games": [
+            ("mode",         "ALTER TABLE games ADD COLUMN mode TEXT NOT NULL DEFAULT 'solo'"),
+            ("join_code",    "ALTER TABLE games ADD COLUMN join_code TEXT"),
+            ("host_role_id", "ALTER TABLE games ADD COLUMN host_role_id TEXT"),
+            ("room_name",    "ALTER TABLE games ADD COLUMN room_name TEXT"),
+            ("turn_timeout_seconds", "ALTER TABLE games ADD COLUMN turn_timeout_seconds INTEGER"),
+        ],
+        "messages": [
+            (
+                "proposal_is_secret",
+                "ALTER TABLE messages ADD COLUMN proposal_is_secret BOOLEAN NOT NULL DEFAULT 0",
+            ),
+            ("proposal_terms", "ALTER TABLE messages ADD COLUMN proposal_terms JSON"),
+        ],
+    }
+    for table, pending in migrations.items():
+        result = await conn.execute(text(f"PRAGMA table_info({table})"))
+        existing = {row[1] for row in result.fetchall()}
+        for col, sql in pending:
+            if col not in existing:
+                await conn.execute(text(sql))

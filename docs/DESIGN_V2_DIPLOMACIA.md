@@ -107,8 +107,8 @@ defensa redujo el ataque tebano*).
 
 | Fase | Contenido | Estado |
 |------|-----------|--------|
-| **A — Cimientos** | Crónica determinista + pasar mensajes/pactos/crónica a evaluación, narrativa y decisiones de bots. Sin UI nueva. | **En curso** |
-| **B — Bots vivos** | Bots responden mensajes; propuestas de pacto bot→humano y humano↔humano. | Pendiente |
+| **A — Cimientos** | Crónica determinista + pasar mensajes/pactos/crónica a evaluación, narrativa y decisiones de bots. Sin UI nueva. | **Hecha** |
+| **B — Bots vivos** | Bots responden mensajes; propuestas de pacto bot→humano y humano↔humano. | **Hecha** |
 | **C — Consecuencias** | Credibilidad + detección de promesas + modificadores en motor y scoring. | Pendiente |
 | **D — Información** | Intel engine con filtraciones reales según INT. | Pendiente |
 | **E — Fachada** | Feed diplomático unificado y panel causa-efecto. | Pendiente |
@@ -141,3 +141,33 @@ Cableado en `turn_service._resolve_turn_full`:
 Sin cambios de esquema de BD ni de UI. Los mensajes empiezan a importar:
 los bots reaccionan a ellos en sus acciones y la evaluación premia la
 coherencia con lo negociado.
+
+### Detalle de la Fase B
+
+Nuevo módulo `backend/src/services/diplomacy_service.py` con dos entradas,
+cada una con núcleo testeable y wrapper en background (sesión propia):
+
+- **Respuestas de bots** (`generate_bot_reply`): un mensaje privado
+  humano→bot dispara una respuesta en personaje (prompt
+  `bot_message_reply.py`, Haiku), con briefing, crónica, pactos visibles y el
+  hilo bilateral completo. Si Claude falla, silencio (mejor que una respuesta
+  enlatada). Se difunde `message_received` por WebSocket.
+- **Diplomacia iniciada por bots** (`run_bot_diplomacy_for_game`): al abrirse
+  cada turno (incluido el 1), cada bot decide UN movimiento opcional (prompt
+  `bot_diplomacy.py`): declaración pública, mensaje privado o propuesta de
+  pacto. Se ejecutan en secuencia para que un pacto firmado por un bot sea
+  visible para los siguientes. Flag `BOT_DIPLOMACY_ENABLED` para desactivarlo.
+
+Pactos v2 (`pact_service.py`):
+
+- Cualquiera puede proponer a cualquiera. Destino bot → decisión síncrona de
+  Claude, ahora con crónica e hilo de conversación con el proponente. Destino
+  humano → la propuesta queda **pendiente** (nuevas columnas
+  `proposal_is_secret`/`proposal_terms` en `messages` + migración SQLite) y se
+  resuelve vía `POST /pacts/proposals/{message_id}/respond`.
+- Guard de duplicados: pacto activo o propuesta pendiente entre las mismas
+  dos partes bloquea nuevas propuestas.
+
+Frontend: botones aceptar/rechazar sobre propuestas pendientes en el panel de
+mensajes, toast de "propuesta pendiente", `respondToProposal` en el cliente
+API y difusión WS que refresca el estado al llegar mensajes de bots.

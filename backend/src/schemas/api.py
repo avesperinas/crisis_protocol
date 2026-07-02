@@ -199,10 +199,19 @@ class PactProposalSubmit(BaseModel):
 
 
 class PactProposalResult(BaseModel):
+    # "accepted"/"rejected" for bot targets (decided synchronously);
+    # "pending" for human targets (they respond later).
+    status: Literal["accepted", "rejected", "pending"]
     accepted: bool
     pact_id: str | None
     proposal_message_id: str
     reason: str
+
+
+class PactProposalRespond(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accept: bool
 
 
 class PactBreakResult(BaseModel):
