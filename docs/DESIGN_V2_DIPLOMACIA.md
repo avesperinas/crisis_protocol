@@ -110,7 +110,7 @@ defensa redujo el ataque tebano*).
 | **A — Cimientos** | Crónica determinista + pasar mensajes/pactos/crónica a evaluación, narrativa y decisiones de bots. Sin UI nueva. | **Hecha** |
 | **B — Bots vivos** | Bots responden mensajes; propuestas de pacto bot→humano y humano↔humano. | **Hecha** |
 | **C — Consecuencias** | Credibilidad + detección de promesas + modificadores en motor y scoring. | **Hecha** |
-| **D — Información** | Intel engine con filtraciones reales según INT. | Pendiente |
+| **D — Información** | Intel engine con filtraciones reales según INT. | **Hecha** |
 | **E — Fachada** | Feed diplomático unificado y panel causa-efecto. | Pendiente |
 
 ### Detalle de la Fase A
@@ -203,3 +203,29 @@ y se pierde rápido). Romper un pacto explícitamente cuesta además −10
 La causalidad es correcta: el turno se resuelve con la credibilidad con la
 que los jugadores entraron; el veredicto de promesas mueve la credibilidad
 que regirá la diplomacia del turno siguiente.
+
+### Detalle de la Fase D
+
+Nuevo `backend/src/engine/intel.py`, puro y determinista
+(`compute_private_observations`): tras resolver el turno decide qué hechos
+**verificados** aprende cada facción, y Claude solo redacta el cable
+alrededor de ellos (el prompt de intel prohíbe omitirlos, suavizarlos o
+inventar más allá).
+
+Fuentes, de mayor a menor fuerza:
+
+1. **Espionaje dirigido** (`intel_espionage` con tokens INT, no contrarrestado):
+   directiva literal, postura y reparto de tokens del objetivo; con pool
+   INT ≥ 8, además UN secreto — pacto secreto activo del objetivo o, en su
+   defecto, pista de su objetivo oculto. Elección determinista.
+2. **Contrainteligencia**: si te espiaron y el espía fue expuesto, sabes
+   quién fue (aunque tu INT sea bajo — cazar a un espía in fraganti es un
+   hecho). El espía quemado no aprende nada.
+3. **Pactos intel_share**: el socio comparte su propio cuadro operativo
+   (postura, esfuerzo principal, objetivo de su acción).
+4. **Señales pasivas** sobre la facción más "notable" del turno (mayor
+   huella de tensión): INT ≥ 12 → su directiva literal; INT 6–11 → postura y
+   esfuerzo principal; INT < 6 → nada.
+
+Gastar en INT y en espionaje pasa de comprar prosa a comprar información
+jugable; el contraespionaje pasa de reducir números a quemar agentes.

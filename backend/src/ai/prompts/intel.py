@@ -20,11 +20,12 @@ RULES:
 - First person, tone of an internal diplomatic cable.
 - No markdown, no bullets — prose.
 - Total: 3-4 sentences. Maximum 60 words.
+- The PRIVATE INFORMATION block contains VERIFIED facts selected by your intelligence service (espionage results, exposed spies, allied reports). Report them faithfully — never omit, soften or contradict an espionage result, and NEVER invent concrete facts beyond that block.
 
-CALIBRATION BY INT:
-- INT >= 12: 1-2 concrete, reliable facts about other players.
-- INT 6..11: 1 concrete fact + 1 unconfirmed rumor.
-- INT < 6: all speculative, no concrete names.
+CALIBRATION BY INT (applies to how much you speculate BEYOND the verified facts):
+- INT >= 12: confident, precise tone.
+- INT 6..11: report the verified facts, plus at most 1 unconfirmed rumor clearly marked as such.
+- INT < 6: outside the verified facts, everything is speculative and nameless.
 
 {language_instruction}"""
 

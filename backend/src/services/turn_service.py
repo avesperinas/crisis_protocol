@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.ai.bot import BotDecision, decide_with_claude_or_fallback
 from src.ai.parsing import EvaluatedAction
+from src.engine.intel import compute_private_observations
 from src.engine.resolver import resolve_turn
 from src.engine.types import ActionInput, ActionType, TokenAllocation
 from src.models import Action, Game, GameStatus, Player, Turn, TurnStatus
@@ -280,11 +281,23 @@ async def _resolve_turn_full(
     )
     turn.narrative = narrative
 
+    # Phase D: the deterministic intel engine decides which verified facts
+    # each faction learns (espionage results, caught spies, intel-share pacts,
+    # passive signals by INT level). Claude writes prose around real facts.
+    hidden_objectives = {f.id: f.hidden_objective.text for f in scenario.factions}
+
     async def _gen(a: Action) -> str:
         role = role_by_uuid[a.player_id]
         faction = next(f for f in scenario.factions if f.id == role)
         own_action = f"Posture: {a.posture}. Directive: {a.directive!r}."
         int_level = players_by_role[role].resources.get("INT", 0)
+        observations = compute_private_observations(
+            viewer_id=role,
+            resolved_actions=result.resolved_actions,
+            state=state,
+            int_level=int_level,
+            hidden_objectives=hidden_objectives,
+        )
         try:
             return await ai_service.generate_intel(
                 scenario=scenario,
@@ -293,6 +306,7 @@ async def _resolve_turn_full(
                 int_level=int_level,
                 public_summary=resolved_summary[:1000],
                 own_action=own_action,
+                private_observations=observations or "(no new private data)",
                 language=game.language,
             )
         except Exception as e:  # noqa: BLE001
