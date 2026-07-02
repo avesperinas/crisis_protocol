@@ -172,6 +172,8 @@
     "invitedBtn": "Invitado"
   },
   "resolution": {
+    "chronicleTitle": "Crónica de la partida",
+    "secretsRevealedHint": "Con la partida terminada, los pactos secretos salen a la luz.",
     "loading": "Cargando desenlace…",
     "title": "Desenlace",
     "finalNarrativeTitle": "Narrativa final",
@@ -214,7 +216,15 @@
       "privatePlaceholder": "Mensaje privado a {{target}}…",
       "sendBtn": "Enviar",
       "acceptProposal": "Aceptar pacto",
-      "rejectProposal": "Rechazar"
+      "rejectProposal": "Rechazar",
+      "feedChannel": "Cronología",
+      "turnHeader": "Turno {{n}}",
+      "pactSigned": "{{a}} y {{b}} firman: {{type}}",
+      "pactBroken": "{{by}} rompe el pacto: {{type}}",
+      "secretEventTag": "(secreto)",
+      "promiseKept": "{{role}} cumplió su palabra",
+      "promiseBroken": "{{role}} rompió su palabra",
+      "noSharedPacts": "sin pactos entre vosotros"
     },
     "pactsActive": {
       "label": "Pactos activos",

@@ -172,6 +172,8 @@
     "invitedBtn": "Invited"
   },
   "resolution": {
+    "chronicleTitle": "Game chronicle",
+    "secretsRevealedHint": "With the game over, secret pacts come to light.",
     "loading": "Loading outcome…",
     "title": "Outcome",
     "finalNarrativeTitle": "Final narrative",
@@ -214,7 +216,15 @@
       "privatePlaceholder": "Private message to {{target}}…",
       "sendBtn": "Send",
       "acceptProposal": "Accept pact",
-      "rejectProposal": "Reject"
+      "rejectProposal": "Reject",
+      "feedChannel": "Timeline",
+      "turnHeader": "Turn {{n}}",
+      "pactSigned": "{{a}} and {{b}} sign: {{type}}",
+      "pactBroken": "{{by}} breaks the pact: {{type}}",
+      "secretEventTag": "(secret)",
+      "promiseKept": "{{role}} kept their word",
+      "promiseBroken": "{{role}} broke their word",
+      "noSharedPacts": "no pacts between you"
     },
     "pactsActive": {
       "label": "Active pacts",

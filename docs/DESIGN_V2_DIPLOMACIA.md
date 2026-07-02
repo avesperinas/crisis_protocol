@@ -111,7 +111,7 @@ defensa redujo el ataque tebano*).
 | **B — Bots vivos** | Bots responden mensajes; propuestas de pacto bot→humano y humano↔humano. | **Hecha** |
 | **C — Consecuencias** | Credibilidad + detección de promesas + modificadores en motor y scoring. | **Hecha** |
 | **D — Información** | Intel engine con filtraciones reales según INT. | **Hecha** |
-| **E — Fachada** | Feed diplomático unificado y panel causa-efecto. | Pendiente |
+| **E — Fachada** | Feed diplomático unificado y panel causa-efecto. | **Hecha** |
 
 ### Detalle de la Fase A
 
@@ -229,3 +229,28 @@ Fuentes, de mayor a menor fuerza:
 
 Gastar en INT y en espionaje pasa de comprar prosa a comprar información
 jugable; el contraespionaje pasa de reducir números a quemar agentes.
+
+### Detalle de la Fase E
+
+**Backend.** El estado (`GameStateView`) y el resultado final
+(`FinalResultView`) exponen tres listas nuevas construidas por
+`_build_feed_views`:
+
+- `turn_summaries` — turnos resueltos con narrativa y arco de tensión.
+- `pact_events` — firmas y rupturas; los secretos solo aparecen para sus
+  partes mientras la partida corre, y **para todos al terminar** (los
+  secretos salen a la luz en la crónica final).
+- `promise_events` — veredictos cumplió/rompió de la evaluación (registro
+  público, sin la nota interna).
+
+**Frontend.**
+
+- `MessagePanel` es ahora el **panel de diplomacia**: la primera pestaña,
+  "Cronología", es el timeline unificado agrupado por turno (declaraciones
+  públicas → eventos de pacto → veredictos de promesa → narrativa, con arco
+  de tensión en la cabecera del turno). Las pestañas por facción muestran el
+  hilo privado con una **cabecera de relación**: barra de credibilidad y
+  chips de los pactos activos entre ambos.
+- La página de **Resolución** añade la "Crónica de la partida": todos los
+  turnos con narrativa, eventos de pacto (secretos revelados) y promesas,
+  cerrando el arco causa-efecto de la partida completa.

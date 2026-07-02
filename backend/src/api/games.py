@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import get_ai_service, get_current_user_optional, get_session
 from src.engine.objectives import evaluate_objective
 from src.engine.scoring import calculate_score
-from src.models import Game, Pact, Player, Turn, User
+from src.models import Action, Game, Pact, Player, Turn, TurnStatus, User
 from src.schemas.api import (
     FactionView,
     FinalResultView,
@@ -18,11 +18,14 @@ from src.schemas.api import (
     LobbySlot,
     LobbyStateView,
     MessageView,
+    PactEventView,
     PactView,
     PlayerView,
+    PromiseEventView,
     ResolvedActionView,
     ScoreboardEntry,
     ScoreBreakdownView,
+    TurnSummaryView,
     TurnView,
 )
 from src.scenarios import get_scenario
@@ -305,6 +308,10 @@ async def get_game_state(
         for m in msgs
     ]
 
+    turn_summaries, pact_events, promise_events = await _build_feed_views(
+        session, game_id, players, viewer_uuid=you.id
+    )
+
     return GameStateView(
         game_id=game.id,
         scenario_id=scenario.id,
@@ -322,6 +329,9 @@ async def get_game_state(
         messages=messages_view,
         current_turn_view=turn_view,
         previous_turn_view=previous_turn_view,
+        turn_summaries=turn_summaries,
+        pact_events=pact_events,
+        promise_events=promise_events,
     )
 
 
@@ -374,6 +384,10 @@ async def get_final_result(
             .where(Turn.game_id == game_id, Turn.turn_number == game.max_turns)
         )
     ).scalar_one_or_none()
+    # Full chronicle with secrets revealed (viewer_uuid=None): the game is over.
+    turn_summaries, pact_events, promise_events = await _build_feed_views(
+        session, game_id, players, viewer_uuid=None
+    )
     return FinalResultView(
         game_id=game.id,
         scenario_id=game.scenario_id,
@@ -381,10 +395,114 @@ async def get_final_result(
         final_tension=game.tension,
         final_narrative=last_turn.narrative if last_turn else None,
         scoreboard=scoreboard,
+        turn_summaries=turn_summaries,
+        pact_events=pact_events,
+        promise_events=promise_events,
     )
 
 
 # ----- helpers -----
+
+
+async def _build_feed_views(
+    session: AsyncSession,
+    game_id: str,
+    players: list[Player],
+    *,
+    viewer_uuid: str | None,
+) -> tuple[list[TurnSummaryView], list[PactEventView], list[PromiseEventView]]:
+    """Material for the diplomacy timeline: resolved-turn summaries, pact
+    events and promise verdicts. `viewer_uuid=None` means the game is over and
+    secret pacts are revealed to everyone; otherwise secret pacts only appear
+    for their parties.
+    """
+    role_by_uuid = {p.id: p.role_id for p in players}
+
+    turns = (
+        (
+            await session.execute(
+                select(Turn).where(Turn.game_id == game_id).order_by(Turn.turn_number)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    turn_summaries = [
+        TurnSummaryView(
+            turn_number=t.turn_number,
+            narrative=t.narrative,
+            tension_at_start=t.tension_at_start,
+            tension_at_end=t.tension_at_end,
+        )
+        for t in turns
+        if t.status == TurnStatus.FINISHED.value
+    ]
+
+    pacts = (
+        (await session.execute(select(Pact).where(Pact.game_id == game_id))).scalars().all()
+    )
+    pact_events: list[PactEventView] = []
+    for p in pacts:
+        if (
+            p.is_secret
+            and viewer_uuid is not None
+            and viewer_uuid not in (p.player_a_id, p.player_b_id)
+        ):
+            continue
+        a = role_by_uuid.get(p.player_a_id, "?")
+        b = role_by_uuid.get(p.player_b_id, "?")
+        pact_events.append(
+            PactEventView(
+                turn_number=p.created_turn,
+                kind="signed",
+                pact_type=p.type,
+                a_role_id=a,
+                b_role_id=b,
+                is_secret=p.is_secret,
+            )
+        )
+        if p.broken_turn is not None:
+            pact_events.append(
+                PactEventView(
+                    turn_number=p.broken_turn,
+                    kind="broken",
+                    pact_type=p.type,
+                    a_role_id=a,
+                    b_role_id=b,
+                    is_secret=p.is_secret,
+                    broken_by_role_id=(
+                        role_by_uuid.get(p.broken_by_player_id)
+                        if p.broken_by_player_id
+                        else None
+                    ),
+                )
+            )
+    pact_events.sort(key=lambda e: e.turn_number)
+
+    turn_number_by_id = {t.id: t.turn_number for t in turns}
+    actions = (
+        (
+            await session.execute(
+                select(Action).join(Turn, Action.turn_id == Turn.id).where(Turn.game_id == game_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    promise_events: list[PromiseEventView] = []
+    for a in actions:
+        assessment = (a.effects or {}).get("promise_assessment")
+        if assessment not in ("kept", "broken"):
+            continue
+        role = role_by_uuid.get(a.player_id)
+        turn_no = turn_number_by_id.get(a.turn_id)
+        if role and turn_no:
+            promise_events.append(
+                PromiseEventView(turn_number=turn_no, role_id=role, assessment=assessment)
+            )
+    promise_events.sort(key=lambda e: (e.turn_number, e.role_id))
+
+    return turn_summaries, pact_events, promise_events
 
 
 async def _build_turn_view(session: AsyncSession, turn: Turn, you: Player, scenario) -> TurnView:

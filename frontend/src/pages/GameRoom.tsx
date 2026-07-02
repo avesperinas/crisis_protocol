@@ -322,6 +322,12 @@ export function GameRoom() {
                 roleId={state.your_role_id}
                 factions={state.factions}
                 messages={state.messages}
+                activePacts={state.active_pacts}
+                pactLabels={state.pact_type_labels}
+                turnSummaries={state.turn_summaries}
+                pactEvents={state.pact_events}
+                promiseEvents={state.promise_events}
+                currentTurn={state.current_turn}
                 onSent={refresh}
                 fill
               />

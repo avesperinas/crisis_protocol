@@ -135,6 +135,29 @@ export interface MessageView {
   created_at: string
 }
 
+export interface TurnSummaryView {
+  turn_number: number
+  narrative: string | null
+  tension_at_start: number
+  tension_at_end: number | null
+}
+
+export interface PactEventView {
+  turn_number: number
+  kind: 'signed' | 'broken'
+  pact_type: string
+  a_role_id: string
+  b_role_id: string
+  is_secret: boolean
+  broken_by_role_id: string | null
+}
+
+export interface PromiseEventView {
+  turn_number: number
+  role_id: string
+  assessment: 'kept' | 'broken'
+}
+
 export interface GameStateView {
   game_id: string
   scenario_id: string
@@ -152,6 +175,9 @@ export interface GameStateView {
   messages: MessageView[]
   current_turn_view: TurnView | null
   previous_turn_view: TurnView | null
+  turn_summaries: TurnSummaryView[]
+  pact_events: PactEventView[]
+  promise_events: PromiseEventView[]
 }
 
 export interface PactProposalResult {
@@ -206,4 +232,8 @@ export interface FinalResultView {
   final_tension: number
   final_narrative: string | null
   scoreboard: ScoreboardEntry[]
+  /** Full chronicle — the game is over, secret pacts included. */
+  turn_summaries: TurnSummaryView[]
+  pact_events: PactEventView[]
+  promise_events: PromiseEventView[]
 }

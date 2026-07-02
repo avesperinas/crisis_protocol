@@ -125,6 +125,61 @@ async def test_broken_promise_lowers_credibility(client: AsyncClient) -> None:
     assert _credibility(state, "atenas") == 50
 
 
+async def test_feed_views_in_state(client: AsyncClient) -> None:
+    """Phase E: the state exposes turn summaries, pact events (secret-filtered
+    per viewer) and promise verdicts."""
+    game_id = await _create_game(client)
+
+    # Public pact macedonia<->tebas, plus a secret pact between two bots.
+    r = await client.post(
+        f"/api/games/{game_id}/pacts/propose",
+        params={"role_id": "macedonia"},
+        content=json.dumps({"target_role_id": "tebas", "pact_type": "alliance"}),
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.json()["accepted"]
+    r = await client.post(
+        f"/api/games/{game_id}/pacts/propose",
+        params={"role_id": "atenas"},
+        content=json.dumps(
+            {"target_role_id": "corinto", "pact_type": "non_aggression", "is_secret": True}
+        ),
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.json()["accepted"]
+
+    # Resolve turn 1 (the fake marks macedonia's promise as broken).
+    r = await client.post(
+        f"/api/games/{game_id}/actions",
+        params={"role_id": "macedonia"},
+        content=json.dumps(
+            {
+                "posture": "ambiguous",
+                "tokens": {"MIL": 2, "DIP": 1, "ECO": 1, "INT": 1},
+                "directive": "ok",
+            }
+        ),
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.json()["turn_resolved"] is True
+
+    # Macedonia's view: sees the public pact, not the bots' secret one.
+    r = await client.get(f"/api/games/{game_id}/state", params={"role_id": "macedonia"})
+    state = r.json()
+    assert [s["turn_number"] for s in state["turn_summaries"]] == [1]
+    assert state["turn_summaries"][0]["narrative"]
+    kinds = {(e["kind"], e["pact_type"]) for e in state["pact_events"]}
+    assert ("signed", "alliance") in kinds
+    assert not any(e["is_secret"] for e in state["pact_events"])
+    assert {"turn_number": 1, "role_id": "macedonia", "assessment": "broken"} in state[
+        "promise_events"
+    ]
+
+    # A party to the secret pact does see it.
+    r = await client.get(f"/api/games/{game_id}/state", params={"role_id": "atenas"})
+    assert any(e["is_secret"] for e in r.json()["pact_events"])
+
+
 async def test_breaking_a_pact_lowers_credibility(client: AsyncClient) -> None:
     game_id = await _create_game(client)
     r = await client.post(

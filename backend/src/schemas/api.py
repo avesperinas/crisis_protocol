@@ -169,6 +169,37 @@ class MessageView(BaseModel):
     created_at: str  # ISO 8601
 
 
+class TurnSummaryView(BaseModel):
+    """One resolved turn for the diplomacy feed / final chronicle."""
+
+    turn_number: int
+    narrative: str | None
+    tension_at_start: int
+    tension_at_end: int | None
+
+
+class PactEventView(BaseModel):
+    """A pact being signed or broken, as feed material. Secret pacts are only
+    included for their parties while the game runs, and for everyone once it
+    ends."""
+
+    turn_number: int
+    kind: Literal["signed", "broken"]
+    pact_type: str
+    a_role_id: str
+    b_role_id: str
+    is_secret: bool
+    broken_by_role_id: str | None = None
+
+
+class PromiseEventView(BaseModel):
+    """A kept/broken promise verdict from the turn evaluation (public record)."""
+
+    turn_number: int
+    role_id: str
+    assessment: Literal["kept", "broken"]
+
+
 class GameStateView(BaseModel):
     """Everything the frontend needs to render the game page from the
     requesting player's perspective."""
@@ -189,6 +220,10 @@ class GameStateView(BaseModel):
     messages: list[MessageView] = []
     current_turn_view: TurnView | None = None
     previous_turn_view: TurnView | None = None
+    # Diplomacy feed (Phase E): the game so far, as event material.
+    turn_summaries: list[TurnSummaryView] = []
+    pact_events: list[PactEventView] = []
+    promise_events: list[PromiseEventView] = []
 
 
 class PactProposalSubmit(BaseModel):
@@ -249,3 +284,7 @@ class FinalResultView(BaseModel):
     final_tension: int
     final_narrative: str | None = None
     scoreboard: list[ScoreboardEntry]
+    # Full chronicle (Phase E). The game is over: secret pacts are revealed.
+    turn_summaries: list[TurnSummaryView] = []
+    pact_events: list[PactEventView] = []
+    promise_events: list[PromiseEventView] = []
