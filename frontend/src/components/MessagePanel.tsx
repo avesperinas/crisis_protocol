@@ -199,7 +199,7 @@ export function MessagePanel({
     <ul
       className={
         'space-y-2 overflow-y-auto mb-3 border-t border-neutral-100 pt-2 ' +
-        (fill ? 'max-h-64 md:max-h-none md:flex-1 md:min-h-[10rem]' : 'max-h-64 md:max-h-72')
+        (fill ? 'max-h-64 md:max-h-[26rem] md:flex-1 md:min-h-[10rem]' : 'max-h-64 md:max-h-72')
       }
     >
       {feedTurns.length === 0 ? (
@@ -292,7 +292,7 @@ export function MessagePanel({
       <ul
         className={
           'space-y-1 overflow-y-auto mb-3 text-sm border-t border-neutral-100 pt-2 ' +
-          (fill ? 'max-h-40 md:max-h-none md:flex-1 md:min-h-[10rem]' : 'max-h-40 md:max-h-72')
+          (fill ? 'max-h-40 md:max-h-[26rem] md:flex-1 md:min-h-[10rem]' : 'max-h-40 md:max-h-72')
         }
       >
         {threadMessages(activeFaction.id).length === 0 ? (

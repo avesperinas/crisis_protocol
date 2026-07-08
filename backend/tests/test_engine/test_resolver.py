@@ -16,17 +16,36 @@ def test_resolver_consolidates_resource_changes_and_clamps_to_zero() -> None:
     assert result.final_player_resources["atenas"]["MIL"] == 0
 
 
-def test_resolver_resources_change_only_from_effects_not_token_spend() -> None:
-    """Spending tokens does NOT directly reduce the pool. Only effects do."""
+def test_resolver_token_spend_depletes_actor_pool() -> None:
+    """Allocated tokens are drawn from the actor's persistent pool: acting costs
+    real resources, so reserves deplete across the game."""
     state = make_state(make_player("esparta", MIL=10), make_player("atenas"))
     actions = [
         make_action(
             "esparta", ActionType.MILITARY_DEFENSIVE, mil=3
-        ),  # purely defensive: no damage anywhere
+        ),  # purely defensive: no damage anywhere, but it still costs 3 MIL
     ]
     result = resolve_turn(actions, state)
-    # Esparta still has MIL = 10 in its pool, even though it allocated 3 MIL tokens.
-    assert result.final_player_resources["esparta"]["MIL"] == 10
+    # Esparta spent 3 MIL tokens → pool drops from 10 to 7.
+    assert result.final_player_resources["esparta"]["MIL"] == 7
+
+
+def test_resolver_token_spend_clamps_when_pool_drained_by_attack() -> None:
+    """If an incoming attack drains the pool below what was spent, the reserve
+    clamps at 0 rather than going negative."""
+    state = make_state(
+        make_player("macedonia", MIL=6),
+        make_player("atenas", MIL=2),
+    )
+    actions = [
+        make_action("macedonia", ActionType.MILITARY_OFFENSIVE, target_id="atenas", mil=3),
+        # atenas spends 3 MIL while being hit for -6 (2 - 6 → 0, then -3 → still 0).
+        make_action("atenas", ActionType.MILITARY_DEFENSIVE, mil=3),
+    ]
+    result = resolve_turn(actions, state)
+    assert result.final_player_resources["atenas"]["MIL"] == 0
+    # macedonia only spent its own 3 MIL tokens → 6 - 3 = 3.
+    assert result.final_player_resources["macedonia"]["MIL"] == 3
 
 
 def test_resolver_applies_tension_delta_and_detects_thresholds() -> None:

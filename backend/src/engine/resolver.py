@@ -44,6 +44,7 @@ def resolve_turn(actions: list[ActionInput], state: GameState) -> TurnResult:
     log.extend(trade_log)
 
     final_resources = _consolidate(state, final_effects, trade_flows)
+    _deduct_token_spend(final_resources, actions, log)
 
     tension_delta = sum(e.tension_delta for e in final_effects)
     new_tension = max(0, min(100, state.tension + tension_delta))
@@ -109,6 +110,28 @@ def _apply_credibility(
     log.append(
         f"{action.player_id} diplomacy scaled by credibility {credibility} (x{factor:.2f})"
     )
+
+
+def _deduct_token_spend(
+    pools: dict[str, dict[str, int]],
+    actions: list[ActionInput],
+    log: list[str],
+) -> None:
+    """Committing tokens spends them from the actor's persistent pool: acting
+    costs real resources, so reserves deplete across the game. Applied last,
+    on top of this turn's effects and trade flows, and clamped at 0. Allocation
+    is capped to the pool at submission time, so this normally never underflows;
+    if an incoming attack drained the pool below what was spent, we clamp.
+    """
+    for a in actions:
+        pool = pools.get(a.player_id)
+        if pool is None:
+            continue
+        for domain in ("MIL", "DIP", "ECO", "INT"):
+            spent = a.tokens.get(domain)  # type: ignore[arg-type]
+            if spent:
+                pool[domain] = max(0, pool.get(domain, 0) - spent)
+        log.append(f"{a.player_id} spent {a.tokens.total()} tokens from reserve")
 
 
 def _consolidate(

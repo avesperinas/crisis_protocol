@@ -11,17 +11,13 @@ interface Props {
 }
 
 /**
- * Appears once when a new turn's narrative becomes available. Self-dismisses
- * after 12s, or immediately on click/tap — there is no "next turn" button.
+ * Appears once when a new turn's narrative becomes available. Stays open until
+ * the player dismisses it (click/tap outside, or the close button) — the
+ * narrative is the turn's payoff and shouldn't vanish on a timer while it's read.
  */
 export function NarrativeCard({ turnNumber, narrative, tensionStart, tensionEnd, onDismiss }: Props) {
   const { t } = useTranslation()
   const [closing, setClosing] = useState(false)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setClosing(true), 12000)
-    return () => clearTimeout(timer)
-  }, [])
 
   useEffect(() => {
     if (!closing) return
@@ -51,7 +47,11 @@ export function NarrativeCard({ turnNumber, narrative, tensionStart, tensionEnd,
           <span className="font-mono">
             {tensionStart} → {tensionEnd}
           </span>
-          <button className="underline" onClick={() => setClosing(true)}>
+          <button
+            className="btn-primary text-sm"
+            style={{ borderColor: 'var(--accent)' }}
+            onClick={() => setClosing(true)}
+          >
             {t('gameRoom.narrativeDismissHint')}
           </button>
         </div>

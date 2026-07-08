@@ -99,7 +99,14 @@ export function GameRoom() {
   const you = state.you
   const youTheme = factionTheme(state.scenario_id, you.role_id)
   const turn = state.current_turn_view
-  const budget = you.token_budget_per_turn ?? 0
+  const rawBudget = you.token_budget_per_turn ?? 0
+  // Tokens come out of the persistent reserve. Once a faction's total reserve
+  // drops below its per-turn budget, it can only spend what it has left — so the
+  // effective budget (and the "spend it all" rule) degrades gracefully.
+  const poolTotal = you.resources
+    ? you.resources.MIL + you.resources.DIP + you.resources.ECO + you.resources.INT
+    : rawBudget
+  const budget = Math.min(rawBudget, poolTotal)
   const total = tokens.MIL + tokens.DIP + tokens.ECO + tokens.INT
   const canSubmit =
     !!posture &&
@@ -205,8 +212,9 @@ export function GameRoom() {
         </section>
 
         {/* Command dashboard: a dramatic full-height tension column, then two
-            content columns (action + diplomacy/intel/pacts). items-stretch plus
-            an internal grower in each column keeps all three ending level. */}
+            content columns (action + diplomacy/intel/pacts). items-stretch lets
+            the tension bar and diplomacy column rise to the row height; the action
+            column opts out with self-start so it stays compact instead of gapping. */}
         <div className="md:flex md:items-stretch md:gap-3">
           {/* Tension — its own dramatic, full-height column */}
           <div className="hidden md:flex md:flex-col md:items-center shrink-0 w-16 rounded border border-neutral-200 bg-neutral-100 px-2 py-3">
@@ -219,9 +227,11 @@ export function GameRoom() {
             <div className="font-mono text-sm tabular-nums">{state.tension}</div>
           </div>
 
-          {/* LEFT — primary action (fills) + what just happened (pinned below) */}
-          <div className="md:flex-[1.6] min-w-0 space-y-3 md:flex md:flex-col">
-            <div className={tabVisibility('action') + ' md:flex-1 md:flex md:flex-col'}>
+          {/* LEFT — primary action + what just happened (below). self-start keeps
+              this column at its content height so it never stretches to match a
+              tall messaging column (which used to open a big gap under the form). */}
+          <div className="md:flex-[1.6] min-w-0 space-y-3 md:self-start">
+            <div className={tabVisibility('action')}>
               <DirectiveCard
                 you={you}
                 scenarioId={state.scenario_id}
@@ -238,7 +248,6 @@ export function GameRoom() {
                 canSubmit={canSubmit}
                 onSubmit={submit}
                 exampleDirective={state.example_directive}
-                fill
               />
             </div>
 

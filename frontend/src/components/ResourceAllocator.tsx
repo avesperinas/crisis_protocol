@@ -27,8 +27,12 @@ export function ResourceAllocator({
 }: Props) {
   const { t } = useTranslation()
   const total = tokens.MIL + tokens.DIP + tokens.ECO + tokens.INT
+  // Tokens are drawn from the persistent reserve, so a domain can never be
+  // allocated more than the pool holds (nor more than the per-turn budget).
+  const domainMax = (d: Domain) =>
+    persistentResources ? Math.min(budget, persistentResources[d]) : budget
   const setDomain = (d: Domain, raw: number) => {
-    const clamped = Math.max(0, Math.min(budget, raw))
+    const clamped = Math.max(0, Math.min(domainMax(d), raw))
     onChange({ ...tokens, [d]: clamped })
   }
   const over = total > budget
@@ -82,7 +86,7 @@ export function ResourceAllocator({
               <input
                 type="range"
                 min={0}
-                max={budget}
+                max={domainMax(d)}
                 value={tokens[d]}
                 onChange={(e) => setDomain(d, parseInt(e.target.value || '0', 10))}
                 disabled={disabled}

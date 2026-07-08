@@ -348,12 +348,14 @@ async def _resolve_turn_full(
 
         # Schedule auto-submit timeout for the next turn if the game is still running.
         # Per-game timeout (set at creation, e.g. async mode = 24h) overrides the global default.
+        # Solo games are exempt: a lone player never blocks anyone, so a timer that
+        # silently plays their turn for them is only a way to lose the game while idle.
         timeout_seconds = (
             game.turn_timeout_seconds
             if game.turn_timeout_seconds is not None
             else settings.turn_timeout_seconds
         )
-        if timeout_seconds > 0:
+        if timeout_seconds > 0 and game.mode != "solo":
             asyncio.create_task(
                 _auto_submit_timeout(game_id, game.current_turn, timeout_seconds)
             )

@@ -134,7 +134,7 @@ class AIService:
             )
             parsed = parse_evaluation_json(raw)
             return TurnEvaluation(response=parsed, used_fallback=False)
-        except (APIError, ParseError) as e:
+        except Exception as e:  # noqa: BLE001 — resolution must never die on the evaluator
             logger.warning(
                 "Evaluation failed (turn %d): %s. Using deterministic fallback.",
                 turn_number,
@@ -203,7 +203,7 @@ class AIService:
                 max_tokens=450,
                 temperature=0.8,
             )
-        except APIError as e:
+        except Exception as e:  # noqa: BLE001 — resolution must never die on the narrator
             logger.warning("Narrative failed (turn %d): %s. Using fallback.", turn_number, e)
             return _fb(
                 language,
